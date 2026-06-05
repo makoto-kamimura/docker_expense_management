@@ -1,0 +1,18 @@
+.env
+.DS_Store
+
+# Rust
+app/backend/target/
+
+# Node (Web)
+app/web/node_modules/
+app/web/.next/
+app/web/out/
+
+# Node (Mobile)
+app/mobile/node_modules/
+app/mobile/.expo/
+app/mobile/dist/
+
+# Local env files inside platform/
+platform/.env

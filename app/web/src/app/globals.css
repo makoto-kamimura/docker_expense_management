@@ -1,0 +1,162 @@
+* { box-sizing: border-box; }
+html, body { padding: 0; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; background: #f5f6f8; color: #1f2330; }
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.nav {
+  background: #1f2937;
+  color: #fff;
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.nav a, .nav button { color: #fff; }
+.nav .links { display: flex; gap: 18px; align-items: center; }
+.nav .links a { font-weight: 500; }
+.nav .who { font-size: 13px; opacity: 0.85; margin-right: 12px; }
+
+main {
+  max-width: 1000px;
+  margin: 24px auto;
+  padding: 0 16px 64px;
+}
+
+h1 { font-size: 22px; margin: 0 0 16px; }
+h2 { font-size: 18px; margin: 24px 0 12px; }
+
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { padding: 10px 12px; border-bottom: 1px solid #eef0f3; text-align: left; font-size: 14px; }
+th { background: #fafbfc; font-weight: 600; }
+
+form .row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+form label { font-size: 13px; color: #4b5563; font-weight: 500; }
+input, select, textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  width: 100%;
+}
+textarea { min-height: 80px; resize: vertical; }
+
+button, .btn {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+button.secondary, .btn.secondary {
+  background: #fff;
+  color: #1f2937;
+  border-color: #d1d5db;
+}
+button.danger, .btn.danger {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+button.warn, .btn.warn {
+  background: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-draft { background: #e5e7eb; color: #374151; }
+.badge-submitted { background: #fde68a; color: #92400e; }
+.badge-approved { background: #bbf7d0; color: #166534; }
+.badge-rejected { background: #fecaca; color: #991b1b; }
+
+/* 申請ステータスのステッパー（横一列・現在地をカラー表示） */
+.stepper {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+.step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  text-align: center;
+}
+/* 各ステップ左側のコネクタ線（先頭は非表示） */
+.step::before {
+  content: "";
+  position: absolute;
+  top: 15px;
+  right: 50%;
+  left: -50%;
+  height: 2px;
+  background: #e5e7eb;
+  z-index: 0;
+}
+.step:first-child::before { display: none; }
+.step-marker {
+  position: relative;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  background: #e5e7eb;
+  border: 2px solid #e5e7eb;
+  color: #9ca3af;
+}
+.step-label { font-size: 12px; font-weight: 600; color: #9ca3af; }
+
+/* 完了済みステップ（緑チェック） */
+.step-done .step-marker { background: #16a34a; border-color: #16a34a; color: #fff; }
+.step-done .step-label { color: #166534; }
+.step-done::before { background: #16a34a; }
+
+/* 現在地ステップ（ステータス別アクセントカラー＋強調リング） */
+.step-current .step-marker { color: #fff; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12); }
+.step-current .step-label { font-size: 13px; }
+.step-current::before { background: #16a34a; }
+
+.step-current.step-draft .step-marker { background: #2563eb; border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15); }
+.step-current.step-draft .step-label { color: #1d4ed8; }
+.step-current.step-submitted .step-marker { background: #f59e0b; border-color: #f59e0b; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18); }
+.step-current.step-submitted .step-label { color: #92400e; }
+.step-current.step-approved .step-marker { background: #16a34a; border-color: #16a34a; box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.18); }
+.step-current.step-approved .step-label { color: #166534; }
+.step-current.step-rejected .step-marker { background: #dc2626; border-color: #dc2626; box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.18); }
+.step-current.step-rejected .step-label { color: #991b1b; }
+/* 却下に至るコネクタは赤で表現 */
+.step-current.step-rejected::before { background: #dc2626; }
+
+.error { background: #fee2e2; color: #991b1b; padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; }
+.muted { color: #6b7280; font-size: 13px; }
+.right { text-align: right; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.stat { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
+.stat .label { color: #6b7280; font-size: 13px; }
+.stat .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
