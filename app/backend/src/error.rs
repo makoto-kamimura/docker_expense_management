@@ -35,28 +35,28 @@ pub enum ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, msg) = match &self {
-            ApiError::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
-            ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
-            ApiError::Forbidden => (StatusCode::FORBIDDEN, self.to_string()),
-            ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
-            ApiError::Conflict(_) => (StatusCode::CONFLICT, self.to_string()),
+            ApiError::NotFound => (StatusCode::NOT_FOUND, "見つかりません".into()),
+            ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "ログインが必要です".into()),
+            ApiError::Forbidden => (StatusCode::FORBIDDEN, "この操作の権限がありません".into()),
+            ApiError::BadRequest(m) => (StatusCode::BAD_REQUEST, m.clone()),
+            ApiError::Conflict(m) => (StatusCode::CONFLICT, m.clone()),
             ApiError::Db(sqlx::Error::RowNotFound) => {
-                (StatusCode::NOT_FOUND, "not found".into())
+                (StatusCode::NOT_FOUND, "見つかりません".into())
             }
             ApiError::Db(e) => {
                 tracing::error!("db error: {e:?}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal error".into())
+                (StatusCode::INTERNAL_SERVER_ERROR, "サーバーエラーが発生しました".into())
             }
             ApiError::Internal(e) => {
                 tracing::error!("internal: {e:?}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal error".into())
+                (StatusCode::INTERNAL_SERVER_ERROR, "サーバーエラーが発生しました".into())
             }
             ApiError::Io(e) => {
                 tracing::error!("io: {e:?}");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal error".into())
+                (StatusCode::INTERNAL_SERVER_ERROR, "サーバーエラーが発生しました".into())
             }
             ApiError::Multipart(e) => (StatusCode::BAD_REQUEST, format!("multipart: {e}")),
-            ApiError::Jwt(_) => (StatusCode::UNAUTHORIZED, "invalid token".into()),
+            ApiError::Jwt(_) => (StatusCode::UNAUTHORIZED, "ログインが必要です".into()),
             ApiError::PasswordHash => (StatusCode::INTERNAL_SERVER_ERROR, "hash error".into()),
         };
         (status, Json(json!({"error": msg}))).into_response()

@@ -1,7 +1,10 @@
+pub mod attachments;
 pub mod auth;
-pub mod expenses;
+pub mod chores;
+pub mod dashboard;
+pub mod family;
 pub mod health;
+pub mod labels;
+pub mod link_previews;
 pub mod ocr;
-pub mod receipts;
-pub mod reports;
-pub mod users;
+pub mod requests;
