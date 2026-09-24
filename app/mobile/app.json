@@ -1,20 +1,33 @@
 {
   "expo": {
-    "name": "経費精算",
+    "name": "RingiWoMerge",
     "slug": "expense-mobile",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "expense",
-    "ios": { "supportsTablet": true },
-    "android": { "package": "com.example.expense" },
-    "web": { "bundler": "metro" },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.example.expense"
+    },
+    "web": {
+      "bundler": "metro"
+    },
     "plugins": [
       "expo-router",
-      ["expo-image-picker", { "cameraPermission": "レシートを撮影して金額・日付を自動入力するためにカメラを使用します。" }]
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Take photos of receipts and product documents to attach them to purchase requests.",
+          "photosPermission": "Attach photos of receipts and product documents to purchase requests."
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "http://localhost:8080"
-    }
+    },
+    "icon": "./assets/icon.png"
   }
 }
