@@ -28,8 +28,8 @@ export default function LoginForm({ action }: { action: ActionFn }) {
         <label htmlFor="password">パスワード</label>
         <input id="password" name="password" type="password" required autoComplete="current-password" />
       </div>
-      <button type="submit" disabled={pending}>
-        {pending ? '送信中…' : 'ログイン'}
+      <button type="submit" className="btn-primary" disabled={pending} style={{ width: '100%' }}>
+        {pending ? 'ログイン中…' : 'ログイン'}
       </button>
     </form>
   );
