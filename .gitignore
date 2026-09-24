@@ -16,3 +16,7 @@ app/mobile/dist/
 
 # Local env files inside platform/
 platform/.env
+
+# Backups (e.g. app.json.bak.20260612-brand, .env.bak.20260612-sec)
+*.bak
+*.bak.*

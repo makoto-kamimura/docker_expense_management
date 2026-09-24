@@ -21,4 +21,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
+# standalone server.js は HOSTNAME で listen する。Docker 既定のコンテナ ID のままだと
+# 複数ネットワーク接続時に片側の IP にしかバインドされないため全インターフェースを指定
+ENV HOSTNAME=0.0.0.0
 CMD ["node", "server.js"]

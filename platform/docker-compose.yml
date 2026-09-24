@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-expense}
       POSTGRES_DB: ${POSTGRES_DB:-expense}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
@@ -36,7 +36,7 @@ services:
     volumes:
       - backend_uploads:/data/uploads
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8082:8080"
 
   web:
     build:
@@ -50,7 +50,7 @@ services:
       API_URL: ${API_URL:-http://backend:8080}
       NODE_ENV: production
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
   nginx:
     image: nginx:1.27-alpine
@@ -60,7 +60,7 @@ services:
       - web
       - backend
     ports:
-      - "80:80"
+      - "127.0.0.1:3100:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
 
