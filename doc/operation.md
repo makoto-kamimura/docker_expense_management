@@ -1,6 +1,6 @@
 # 運用手順書
 
-経費精算管理システムのローカル起動・運用・トラブルシュート手順を記載する。
+RingiWoMerge (稟議をマージ) のローカル起動・運用・トラブルシュート手順を記載する。
 
 ## システム構成
 
@@ -39,9 +39,9 @@ docker compose up --build -d
 
 | サービス | URL | 用途 |
 |----------|-----|------|
-| Nginx | <http://localhost> | 本番想定の統合エンドポイント |
+| Nginx | <http://localhost:3100> | 本番想定の統合エンドポイント |
 | Web | <http://localhost:3000> | Next.js 直接アクセス (開発用) |
-| Backend | <http://localhost:8080> | API 直接アクセス (開発用) |
+| Backend | <http://localhost:8082> | API 直接アクセス (開発用。コンテナ内は 8080) |
 | DB | localhost:5432 | psql / GUI ツールから接続 |
 
 ### 起動 (2回目以降)
@@ -61,20 +61,17 @@ docker compose down -v         # ボリュームも含めて全削除
 
 ## 2. 初期アカウント
 
-起動時に Backend が seed する。**本番投入前に必ず無効化または変更すること。**
+起動時に Backend が seed する (パスワードはすべて `password123`)。**本番投入前に必ず無効化または変更すること。**
 
-| ロール | メール | パスワード |
-|--------|--------|------------|
-| admin | admin@example.com | password123 |
-| approver | approver@example.com | password123 |
-| employee | employee@example.com | password123 |
+| 家族 | メール | 権限 |
+|------|--------|------|
+| Demo Family | dad@example.com | Requester / Reviewer / Admin |
+| Demo Family | mom@example.com | Requester / Reviewer |
+| Demo Family | child@example.com | Requester |
+| Other Family | other@example.com | Requester / Reviewer / Admin |
 
-新規ユーザは `/auth/register` (Web の「新規登録」) から作成可能。デフォルトロールは `employee`。
-ロール変更は現状直接 SQL で行う:
-
-```sql
-UPDATE users SET role = 'approver' WHERE email = 'hanako@example.com';
-```
+新規ユーザは Web の「Create account」から、家族を新しく作る (Admin になる) か招待コードで参加する。
+権限は家族の Admin が Web の Settings で変更でき、変更は即時に反映される (再ログイン不要)。
 
 ## 3. データ確認 / メンテナンス
 
@@ -87,16 +84,17 @@ docker compose exec db psql -U expense -d expense
 ### 主要クエリ
 
 ```sql
--- 全申請の状態別件数
-SELECT status, COUNT(*) FROM expenses GROUP BY status;
+-- 家族ごと・状態別の申請件数
+SELECT f.name, r.status, COUNT(*) FROM purchase_requests r JOIN families f ON f.id = r.family_id
+GROUP BY 1, 2 ORDER BY 1, 2;
 
--- 月次の承認済み総額
-SELECT DATE_TRUNC('month', incurred_on) AS month, SUM(amount_jpy)
-FROM expenses WHERE status = 'approved' GROUP BY 1 ORDER BY 1;
+-- 月次の購入実額
+SELECT DATE_TRUNC('month', purchase_date) AS month, SUM(COALESCE(actual_price, price))
+FROM purchase_requests WHERE status = 'purchased' GROUP BY 1 ORDER BY 1;
 
--- 申請者別の承認待ち件数
-SELECT u.name, COUNT(*) FROM expenses e JOIN users u ON u.id = e.user_id
-WHERE e.status = 'submitted' GROUP BY u.name;
+-- ある申請の操作履歴
+SELECT a.created_at, u.name, a.action, a.metadata FROM activities a
+LEFT JOIN users u ON u.id = a.user_id WHERE a.request_id = '<id>' ORDER BY a.created_at;
 ```
 
 ### バックアップ (手動)
@@ -113,7 +111,7 @@ cat backup_YYYYMMDD.sql | docker compose exec -T db psql -U expense -d expense
 
 ### アップロードファイルの場所
 
-Backend コンテナ内 `/data/uploads/<expense_id>/<uuid>`。Docker ボリューム `backend_uploads` に永続化される。
+Backend コンテナ内 `/data/uploads/<request_id>/<uuid>` (旧・経費精算の領収書は `<expense_id>/<uuid>` のまま)。Docker ボリューム `backend_uploads` に永続化される。
 
 ```bash
 # ホストからアクセス
@@ -160,31 +158,38 @@ DB が初期化中の場合がある。`db` の healthcheck が完了するま�
 - seed が走っていない可能性。`docker compose logs backend | grep seed` で確認。
 - `JWT_SECRET` を変更した場合、既存の Cookie 内のトークンは無効になるためログアウト→再ログインを行う。
 
-### 領収書のダウンロードが 403
+### 添付ファイルや申請が 404 になる
 
-承認者・管理者・本人以外はダウンロードできない仕様。ロールを確認。
+申請と添付は同じ家族のメンバーにしか見えない。下書き (Draft) は申請者本人にしか見えない。
 
 ### Web から API に届かない (ブラウザの fetch でエラー)
 
-Web のサーバサイドからは Docker DNS で `http://backend:8080` を解決している。ブラウザから直接叩く場合は `http://localhost:8080` または Nginx 経由 `/api/...` を使用。
+Web のサーバサイドからは Docker DNS で `http://backend:8080` を解決している。ブラウザから直接叩く場合は `http://localhost:8082` または Nginx 経由 `http://localhost:3100/api/...` を使用。
 
 ### Mobile から API に届かない
 
-- iOS Simulator: `http://localhost:8080` で OK。
-- Android Emulator: `http://10.0.2.2:8080` を `app.json` の `expo.extra.apiUrl` に設定。
-- 実機: ホスト PC の LAN IP を指定 (例 `http://192.168.1.10:8080`)。
+接続先は `EXPO_PUBLIC_API_BASE_URL` → Metro のホストの 8080 番 → `app.json` の `expo.extra.apiUrl` の順に決まる。ローカルの Compose は API を 127.0.0.1:8082 にだけ公開しているので、環境変数か `app.json` で指定する。
+
+- iOS Simulator: `EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start`。
+- Android Emulator: `http://10.0.2.2:8082` を指定。
+- 実機: 端末から届く URL が必要 (Compose の API は 127.0.0.1 のみ公開なので、ポートの公開範囲を変えるか、公開デモの `https://expense.makoto-kamimura.com/api` を使う)。
 
 ### マイグレーション (スキーマ変更) を行いたい
 
-現状は `platform/db/init.sql` を編集して `docker compose down -v && docker compose up` でクリーン再構築。
-将来的には sqlx-cli の migrate に移行予定。
+スキーマは `app/backend/src/migrate.rs` に冪等な SQL (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` など) で書き、
+API 起動時に毎回適用される。旧・経費精算の DB は起動時に一度だけ購入申請へ変換され、旧テーブルは `legacy_*` として残る。
+不要になったら手動で削除してよい:
+
+```sql
+DROP TABLE legacy_receipts, legacy_expense_items, legacy_expense_approvers, legacy_expenses, legacy_tenants;
+```
 
 ## 8. ヘルスチェック
 
 ```bash
-curl -s http://localhost:8080/health     # Backend
-curl -s http://localhost:3000            # Web (HTMLが返ればOK)
-curl -s http://localhost/api/health      # Nginx 経由
+curl -s http://localhost:8082/health       # Backend
+curl -s http://localhost:3000              # Web (HTMLが返ればOK)
+curl -s http://localhost:3100/api/health   # Nginx 経由
 ```
 
 ## 9. 緊急時の対応
