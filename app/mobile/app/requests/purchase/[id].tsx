@@ -8,7 +8,7 @@ import { AttachmentList, pickAndUpload } from '@/components/Attachments';
 import { Button, Card, s } from '@/components/ui';
 import { KIND_TEXT, type RequestDetail } from '@/types';
 
-/** Mark as Purchased (memo.md §17)。レシート撮影で実額・購入日を自動入力できる。 */
+/** Mark as Purchased (readme.md 10.2節)。レシート撮影で実額・購入日を自動入力できる。 */
 export default function PurchaseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [d, setD] = useState<RequestDetail | null>(null);

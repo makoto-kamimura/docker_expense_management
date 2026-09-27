@@ -7,7 +7,7 @@ import LabelSettings from './label-settings';
 import MemberRoles from './member-roles';
 import ChoreSettings from './chore-settings';
 
-/** Family Settings (memo.md §20) */
+/** Family Settings (readme.md 第7章) */
 export default async function SettingsPage() {
   const user = await requireUser();
   const members = await apiFetch<Member[]>('/family/members');

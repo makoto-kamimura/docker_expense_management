@@ -7,7 +7,7 @@ import { Button, C, STATUS_COLOR, s } from '@/components/ui';
 import { LabelList } from '@/components/Labels';
 import { FILTERS, KINDS, KIND_LABEL, KIND_TEXT, statusLabel, type Me, type RequestKind, type RequestListItem } from '@/types';
 
-/** トップ: 申請一覧 + フィルター (memo.md §6) */
+/** トップ: 申請一覧 + フィルター (readme.md 8.6節) */
 export default function RequestsScreen() {
   const [items, setItems] = useState<RequestListItem[]>([]);
   const [filter, setFilter] = useState<string>('all');

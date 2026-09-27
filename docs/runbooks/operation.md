@@ -1,29 +1,10 @@
 # 運用手順書
 
-RingiWoMerge (稟議をマージ) のローカル起動・運用・トラブルシュート手順を記載する。
+RingiWoMerge (稟議をマージ) のローカル起動・運用・トラブルシュート手順を記載する。仕様は [readme.md](../../readme.md) を参照する。
 
 ## システム構成
 
-```
-                ┌──────────────────────────────────────────┐
-                │             Nginx (port 80)              │
-                │   /        → web:3000                    │
-                │   /api/    → backend:8080                │
-                └────────────┬──────────────┬──────────────┘
-                             │              │
-                  ┌──────────▼─────┐   ┌────▼────────────┐
-                  │ Next.js (web)  │   │ Rust API (be)   │
-                  │   port 3000    │   │   port 8080     │
-                  └──────────┬─────┘   └─────────┬───────┘
-                             │ (server-side fetch via internal DNS)
-                             │                   │
-                  ┌──────────▼───────────────────▼───────┐
-                  │           PostgreSQL (db)            │
-                  │              port 5432               │
-                  └──────────────────────────────────────┘
-
-  Mobile (Expo) → 直接 backend:8080 (LAN/Emulator経由)
-```
+構成図・サービスとポートの一覧は、仕様書の [17.2 システム構成](../../readme.md#172-システム構成) と [17.4 Docker Compose の構成](../../readme.md#174-docker-compose-の構成) を参照。
 
 ## 1. 起動 / 停止
 
@@ -63,15 +44,15 @@ docker compose down -v         # ボリュームも含めて全削除
 
 起動時に Backend が seed する (パスワードはすべて `password123`)。**本番投入前に必ず無効化または変更すること。**
 
-| 家族 | メール | 権限 |
-|------|--------|------|
-| Demo Family | dad@example.com | Requester / Reviewer / Admin |
-| Demo Family | mom@example.com | Requester / Reviewer |
-| Demo Family | child@example.com | Requester |
-| Other Family | other@example.com | Requester / Reviewer / Admin |
+| 家族 | 名前 | メール | 権限 |
+|------|------|--------|------|
+| デモ家族 | パパ | dad@example.com | 申請者 / レビュアー / 管理者 |
+| デモ家族 | ママ | mom@example.com | 申請者 / レビュアー |
+| デモ家族 | 子ども | child@example.com | 申請者 |
+| 別の家族 | おとなりさん | other@example.com | すべて（家族ごとの分離の確認用） |
 
-新規ユーザは Web の「Create account」から、家族を新しく作る (Admin になる) か招待コードで参加する。
-権限は家族の Admin が Web の Settings で変更でき、変更は即時に反映される (再ログイン不要)。
+新規ユーザは Web の登録画面から、家族を新しく作る (管理者になる) か招待コードで参加する。
+権限は家族の管理者が Web の設定画面で変更でき、変更は即時に反映される (再ログイン不要)。
 
 ## 3. データ確認 / メンテナンス
 
@@ -145,7 +126,7 @@ docker compose logs -f web      # Web のみ
 2. `platform/nginx/nginx.conf` に TLS 設定 / `server_name` を追加。
 3. CDN/L4LB の背後で Nginx の 80/443 を公開。
 4. `docker compose pull && docker compose up -d --build` でローリング更新。
-5. 領収書ストレージは将来 MinIO/S3 に切り替え予定 ([task.md](task.md) 参照)。
+5. 領収書ストレージは将来 MinIO/S3 に切り替え予定 ([残タスク](../tasks/task.md) 参照)。
 
 ## 7. トラブルシュート
 

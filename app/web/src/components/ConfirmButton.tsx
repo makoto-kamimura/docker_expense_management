@@ -2,7 +2,7 @@
 import { useRef } from 'react';
 
 /**
- * 確認ダイアログを挟むボタン (memo.md §15 / §16 の Approve・Merge 確認)。
+ * 確認ダイアログを挟むボタン (readme.md 9.5節 / 10.1節 の承認・マージの確認)。
  * onConfirm が false を返したらダイアログを閉じない。
  */
 export default function ConfirmButton({

@@ -75,7 +75,7 @@ const FIELD_LABEL: Record<string, string> = {
   alternatives: '比較商品',
 };
 
-/** Activity の操作を文章にする (memo.md §28) */
+/** Activity の操作を文章にする (readme.md 第11章) */
 export function describeEvent(e: Extract<TimelineEntry, { type: 'event' }>, kind: RequestKind = 'purchase'): string {
   const who = e.user?.name ?? '退会したメンバー';
   switch (e.action) {
