@@ -1,21 +1,3 @@
-/* demo bar — shown only when DEMO_MODE=true */
-#__demo-bar {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
-  height: 44px; background: #0f172a;
-  display: flex; align-items: center; padding: 0 20px; gap: 14px;
-  font-family: Inter, "Noto Sans JP", system-ui, sans-serif;
-  font-size: 13px; border-bottom: 1px solid #1e293b;
-  box-sizing: border-box; color: #f1f5f9;
-}
-#__demo-bar a { text-decoration: none; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-#__demo-bar a:hover { opacity: .7; transition: opacity .15s; }
-.__db-title { color: #f1f5f9; font-weight: 600; letter-spacing: -.02em; }
-.__db-sep   { color: #334155; user-select: none; }
-.__db-back  { color: #94a3b8; }
-.__db-sp    { flex: 1; min-width: 0; }
-.__db-issues{ color: #94a3b8; display: flex; align-items: center; }
-.__db-badge { color: #64748b; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; background: #1e293b; padding: 3px 8px; border-radius: 4px; font-weight: 500; }
-
 /* ---- RingiWoMerge: GitHub (Primer) 風スタイル ---- */
 :root {
   --fg: #1f2328;
@@ -367,7 +349,7 @@ code.invite { font-size: 18px; letter-spacing: .15em; padding: 4px 12px; }
 @media print {
   @page { size: A4 landscape; margin: 10mm; }
   body { background: #fff; padding-top: 0 !important; }
-  #__demo-bar, .header, .no-print { display: none !important; }
+  .header, .no-print { display: none !important; }
   main { max-width: none; margin: 0; padding: 0; }
   .slide, .slide[data-active="false"] { display: flex !important; aspect-ratio: auto; min-height: 180mm; box-shadow: none; border: 0; border-radius: 0; padding: 0; margin: 0; break-after: page; }
   .slide:last-of-type { break-after: auto; }

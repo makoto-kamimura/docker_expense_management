@@ -7,8 +7,8 @@ import type { Me, Member } from '@/types';
 
 /** ログイン。初回はオンボーディングへ、それ以外は申請一覧へ進む。 */
 export default function LoginScreen() {
-  const [email, setEmail] = useState('dad@example.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
   const next = async () => {
@@ -51,7 +51,6 @@ export default function LoginScreen() {
       <TextInput style={s.input} value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password" />
       <Button title="ログイン" variant="primary" onPress={onLogin} busy={busy} style={{ marginTop: 20 }} />
       <Text style={[s.muted, { marginTop: 16, textAlign: 'center' }]}>
-        デモ: dad@ / mom@ / child@example.com · password123{'\n'}
         家族の新規作成は Web から行えます。
       </Text>
     </KeyboardAvoidingView>
