@@ -25,7 +25,7 @@ use crate::{
 const TODAY_SQL: &str = "(now() AT TIME ZONE 'Asia/Tokyo')::date";
 /// 草グラフに出す週数
 const CALENDAR_WEEKS: i64 = 12;
-const MAX_CHORES: i64 = 30;
+const MAX_CHORES: i64 = 100;
 
 /// 1 つの家事の説明・見本画像の説明の最大文字数
 const MAX_DESCRIPTION: usize = 200;
