@@ -885,7 +885,7 @@ async fn replace_reviewers(
     .fetch_one(&mut **tx)
     .await?;
     if found as usize != ids.len() {
-        return Err(ApiError::BadRequest("レビュアーはレビュー権限のある家族から選んでください".into()));
+        return Err(ApiError::BadRequest("レビュアーはレビュー権限のあるメンバーから選んでください".into()));
     }
     // 残る Reviewer の判定は維持する
     sqlx::query("DELETE FROM request_reviewers WHERE request_id = $1 AND NOT (user_id = ANY($2))")

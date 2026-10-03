@@ -246,11 +246,11 @@ export default function RequestForm({
       </div>
 
       <div className="box">
-        <div className="box-head"><h2>レビュアー<span className="req">*</span> <span className="ja">確認・承認してもらう家族</span></h2></div>
+        <div className="box-head"><h2>レビュアー<span className="req">*</span> <span className="ja">確認・承認してもらうメンバー</span></h2></div>
         <div className="box-body">
           {candidates.length === 0 ? (
             <p className="muted" style={{ margin: 0 }}>
-              レビューできる家族がまだいません。<a href="/settings">設定</a>から家族を招待してください。
+              レビューできるメンバーがまだいません。<a href="/settings">設定</a>からメンバーを招待してください。
             </p>
           ) : (
             <div className="chips">

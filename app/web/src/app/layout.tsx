@@ -11,7 +11,7 @@ import type { RequestListItem } from '@/lib/types';
 
 export const metadata: Metadata = {
   title: 'RingiWoMerge — 稟議をマージ',
-  description: '大きな買い物は、家族のレビューを通してから。家族向けの購入稟議・承認アプリ',
+  description: '大きな買い物は、グループのレビューを通してから。グループ向けの購入稟議・承認アプリ',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

@@ -214,9 +214,9 @@ export default function RequestForm({
         ))}
       </Card>
 
-      <Card title="レビュアー *" ja="確認・承認してもらう家族">
+      <Card title="レビュアー *" ja="確認・承認してもらうメンバー">
         {candidates.length === 0 ? (
-          <Text style={s.muted}>レビューできる家族がまだいません。Web の設定画面から家族を招待してください。</Text>
+          <Text style={s.muted}>レビューできるメンバーがまだいません。Web の設定画面からメンバーを招待してください。</Text>
         ) : (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {candidates.map((m) => {
