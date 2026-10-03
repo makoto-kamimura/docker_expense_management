@@ -226,12 +226,6 @@ export default function RequestDetailScreen() {
             ) : (
               <Text style={s.muted}>レビューを依頼するには、レビュアーを1人以上選んでください。</Text>
             )}
-            {p.can_delete && (
-              <Button title="削除" variant="danger" onPress={() => confirm('この下書きを削除しますか？', 'この操作は取り消せません。', '削除する', async () => {
-                await apiFetch(`/requests/${r.id}`, { method: 'DELETE' });
-                router.back();
-              }, true)} />
-            )}
           </>
         )}
 
@@ -325,6 +319,27 @@ export default function RequestDetailScreen() {
             <Text style={[s.link, { textAlign: 'right', fontWeight: '600', opacity: comment.trim() ? 1 : 0.4 }]}>コメントする</Text>
           </Pressable>
         </View>
+      )}
+
+      {/* 申請者は自分の稟議を、管理者はグループの稟議を、状態に関係なく消せる */}
+      {p.can_delete && (
+        <Button
+          title="この稟議を削除"
+          variant="danger"
+          style={{ marginTop: 24 }}
+          onPress={() =>
+            confirm(
+              'この稟議を削除しますか？',
+              `コメント・添付・履歴もすべて消え、取り消せません。${r.status === 'purchased' ? '\nダッシュボードの支出の集計からも消えます。' : ''}`,
+              '削除する',
+              async () => {
+                await apiFetch(`/requests/${r.id}`, { method: 'DELETE' });
+                router.back();
+              },
+              true,
+            )
+          }
+        />
       )}
     </ScrollView>
   );

@@ -17,6 +17,7 @@ import RequestTabs from '@/components/RequestTabs';
 import LinkCard, { Thumb } from '@/components/LinkCard';
 import ChoreBadges from '@/components/ChoreBadges';
 import ContributionGraph from '@/components/ContributionGraph';
+import DeleteRequestButton from '@/components/DeleteRequestButton';
 
 const DECISION_ICON: Record<ReviewerDecision, IconName> = {
   pending: 'dot',
@@ -246,6 +247,11 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
             <Link href={`/requests/${r.id}/summary`}>スライドで見る</Link>
             <p className="muted" style={{ marginTop: 4 }}>話し合いや印刷 (PDF) 用</p>
           </div>
+          {d.permissions.can_delete && (
+            <div className="side-section">
+              <DeleteRequestButton id={r.id} finished={r.status === 'purchased'} />
+            </div>
+          )}
         </aside>
       </div>
     </div>

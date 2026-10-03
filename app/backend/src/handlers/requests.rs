@@ -68,7 +68,8 @@ pub fn permissions(me: &Member, r: &PurchaseRequest, reviewers: &[Reviewer]) -> 
         can_merge: (is_requester || is_reviewer) && s == Approved,
         can_mark_purchased: is_requester && s == Merged,
         can_close: is_requester && s != Draft && !s.is_finished(),
-        can_delete: is_requester && s == Draft,
+        // 申請者は自分の稟議を、管理者はグループの稟議を、状態に関係なく消せる (他人の下書きはそもそも見えない)
+        can_delete: is_requester || me.is_admin,
         can_comment: s != Draft || is_requester,
         can_upload_evidence: is_requester && !s.is_finished(),
         can_upload_receipt: is_requester && matches!(s, Merged | Purchased),
@@ -989,4 +990,83 @@ fn validate_input(input: &RequestInput) -> ApiResult<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn member(is_admin: bool) -> Member {
+        Member {
+            id: Uuid::new_v4(),
+            family_id: Uuid::nil(),
+            email: String::new(),
+            name: String::new(),
+            avatar_url: None,
+            can_request: true,
+            can_review: true,
+            is_admin,
+        }
+    }
+
+    fn request(requester_id: Uuid, status: RequestStatus) -> PurchaseRequest {
+        PurchaseRequest {
+            id: Uuid::new_v4(),
+            family_id: Uuid::nil(),
+            requester_id,
+            kind: RequestKind::Purchase,
+            parent_id: None,
+            title: String::new(),
+            reason: String::new(),
+            price: 0,
+            currency: "JPY".into(),
+            seller: String::new(),
+            product_name: None,
+            product_url: None,
+            category: RequestCategory::Other,
+            planned_date: None,
+            end_date: None,
+            notes: None,
+            status,
+            submitted_at: None,
+            approved_at: None,
+            merged_at: None,
+            merged_by: None,
+            purchased_at: None,
+            purchase_date: None,
+            actual_price: None,
+            order_number: None,
+            final_product_url: None,
+            closed_at: None,
+            close_reason: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    const ALL: [RequestStatus; 4] =
+        [RequestStatus::Draft, RequestStatus::UnderReview, RequestStatus::Merged, RequestStatus::Purchased];
+
+    #[test]
+    fn requester_can_delete_own_request_in_any_status() {
+        let me = member(false);
+        for st in ALL {
+            assert!(permissions(&me, &request(me.id, st), &[]).can_delete, "{st:?}");
+        }
+    }
+
+    #[test]
+    fn admin_can_delete_others_request() {
+        let admin = member(true);
+        for st in ALL {
+            assert!(permissions(&admin, &request(Uuid::new_v4(), st), &[]).can_delete, "{st:?}");
+        }
+    }
+
+    #[test]
+    fn other_member_cannot_delete() {
+        let me = member(false);
+        assert!(!permissions(&me, &request(Uuid::new_v4(), RequestStatus::Merged), &[]).can_delete);
+    }
 }
