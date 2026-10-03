@@ -7,7 +7,7 @@ import { AttachmentList, pickAndUpload } from '@/components/Attachments';
 import { Avatar, Button, C, Card, Fact, StatusBadge, s } from '@/components/ui';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
 import { LabelEditor } from '@/components/Labels';
-import { DECISION_LABEL, KIND_TEXT, statusLabel, type Me, type RequestDetail } from '@/types';
+import { DECISION_LABEL, KIND_TEXT, statusLabel, typeOf, type Me, type RequestDetail, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
 
 type Action = 'submit' | 'approve' | 'request-changes' | 'reject' | 'merge' | 'close' | 'reopen';
@@ -17,14 +17,21 @@ export default function RequestDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [d, setD] = useState<RequestDetail | null>(null);
   const [me, setMe] = useState<Me | null>(null);
+  const [types, setTypes] = useState<RequestType[]>([]);
   const [token, setTokenState] = useState<string | null>(null);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [detail, self, tk] = await Promise.all([apiFetch<RequestDetail>(`/requests/${id}`), apiFetch<Me>('/me'), getToken()]);
+      const [detail, self, tk, typeList] = await Promise.all([
+        apiFetch<RequestDetail>(`/requests/${id}`),
+        apiFetch<Me>('/me'),
+        getToken(),
+        apiFetch<RequestType[]>('/request-types'),
+      ]);
       setD(detail);
+      setTypes(typeList);
       setMe(self);
       setTokenState(tk);
     } catch (e) {
@@ -84,7 +91,8 @@ export default function RequestDetailScreen() {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={{ padding: 12, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
-      <Text style={{ fontSize: 22, color: C.fg }}>{r.kind !== 'purchase' ? `${t.icon} ` : ''}{r.title}</Text>
+      <Text style={{ fontSize: 22, color: C.fg }}>{typeOf(types, r.type_id, r.kind).icon} {r.title}</Text>
+      <Text style={s.muted}>種類: {typeOf(types, r.type_id, r.kind).name}</Text>
       <Text style={{ fontSize: 24, fontWeight: '700', color: C.fg, marginVertical: 4 }}>{price}</Text>
       <StatusBadge status={r.status} kind={r.kind} hint />
       {d.parent && (
@@ -171,7 +179,7 @@ export default function RequestDetailScreen() {
         ) : (
           d.children.map((c) => (
             <Pressable key={c.id} onPress={() => router.push(`/requests/${c.id}`)} style={{ paddingVertical: 6 }}>
-              <Text style={[s.link, { fontWeight: '600' }]}>{KIND_TEXT[c.kind].icon} {c.title}</Text>
+              <Text style={[s.link, { fontWeight: '600' }]}>{typeOf(types, c.type_id, c.kind).icon} {c.title}</Text>
               <Text style={s.muted}>#{c.id.slice(0, 7)} · {c.requester_name} · {statusLabel(c.kind, c.status)}</Text>
             </Pressable>
           ))

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { apiFetch, getRequestOr404 } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { checkpoints, dateRange, fmtDateTime, hostOf, money } from '@/lib/format';
-import { DECISION_LABEL, KIND_LABEL, KIND_TEXT, STATUS_GROUP, statusLabel, type Label, type RequestRef, type ReviewerDecision } from '@/lib/types';
+import { DECISION_LABEL, KIND_TEXT, STATUS_GROUP, statusLabel, typeOf, type Label, type RequestRef, type RequestType, type ReviewerDecision } from '@/lib/types';
 import LabelChip from '@/components/LabelChip';
 import LabelPicker from '@/components/LabelPicker';
 import Avatar from '@/components/Avatar';
@@ -27,14 +27,14 @@ const DECISION_ICON: Record<ReviewerDecision, IconName> = {
 };
 
 /** 分岐元・分岐先の 1 行 */
-function RefRow({ r }: { r: RequestRef }) {
+function RefRow({ r, types }: { r: RequestRef; types: RequestType[] }) {
   return (
     <div className="person" style={{ alignItems: 'flex-start', fontWeight: 400 }}>
       <span className={`icon-${STATUS_GROUP[r.status]}`} title={statusLabel(r.kind, r.status)} style={{ marginTop: 1 }}>
         <Octicon name={statusIcon(r.status)} size={14} />
       </span>
       <span>
-        <Link href={`/requests/${r.id}`} style={{ fontWeight: 600 }}>{KIND_TEXT[r.kind].icon} {r.title}</Link>
+        <Link href={`/requests/${r.id}`} style={{ fontWeight: 600 }}>{typeOf(types, r.type_id, r.kind).icon} {r.title}</Link>
         <br />
         <span className="muted">#{r.id.slice(0, 7)} · {r.requester_name} · {statusLabel(r.kind, r.status)}</span>
       </span>
@@ -47,7 +47,11 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
   const d = await getRequestOr404(params.id);
   const { request: r, permissions: p } = d;
   // ラベルを付け外しできる人にだけ、家族のラベルの一覧を取る
-  const allLabels = p.can_label ? await apiFetch<Label[]>('/labels') : [];
+  const [allLabels, types] = await Promise.all([
+    p.can_label ? apiFetch<Label[]>('/labels') : Promise.resolve([] as Label[]),
+    apiFetch<RequestType[]>('/request-types'),
+  ]);
+  const type = typeOf(types, r.type_id, r.kind);
   const evidence = d.attachments.filter((a) => a.kind === 'evidence');
   const receipts = d.attachments.filter((a) => a.kind === 'receipt');
   const t = KIND_TEXT[r.kind];
@@ -190,6 +194,10 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
             </p>
           </div>
           <div className="side-section">
+            <h3>種類</h3>
+            <Link href={r.type_id ? `/requests?type=${r.type_id}` : '/requests'} className="label label-outing">{type.icon} {type.name}</Link>
+          </div>
+          <div className="side-section">
             <h3 className="side-head">
               <span>ラベル</span>
               {p.can_label && (
@@ -198,8 +206,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
             </h3>
             <div className="label-list">
               {d.labels.map((l) => <LabelChip key={l.id} label={l} href={`/requests?label=${l.id}`} />)}
-              {r.kind !== 'purchase' && <span className="label label-outing">{t.icon} {KIND_LABEL[r.kind]}</span>}
-              {d.labels.length === 0 && r.kind === 'purchase' && <span className="muted">なし</span>}
+              {d.labels.length === 0 && <span className="muted">なし</span>}
             </div>
           </div>
           {d.merged_by && (
@@ -214,13 +221,13 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
             {d.parent && (
               <>
                 <div className="muted" style={{ marginBottom: 2 }}>分岐元</div>
-                <RefRow r={d.parent} />
+                <RefRow r={d.parent} types={types} />
               </>
             )}
             {d.children.length > 0 && (
               <>
                 <div className="muted" style={{ margin: '8px 0 2px' }}>この稟議から分岐 ({d.children.length})</div>
-                {d.children.map((c) => <RefRow key={c.id} r={c} />)}
+                {d.children.map((c) => <RefRow key={c.id} r={c} types={types} />)}
               </>
             )}
             {!d.parent && d.children.length === 0 && <p className="muted">分岐はありません</p>}

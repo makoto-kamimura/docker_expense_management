@@ -9,7 +9,7 @@ import { useTheme } from '@/theme';
 
 export default function NewRequestScreen() {
   useTheme();
-  const { kind, parent } = useLocalSearchParams<{ kind?: string; parent?: string }>();
+  const { kind, type, parent } = useLocalSearchParams<{ kind?: string; type?: string; parent?: string }>();
   const [parentDetail, setParentDetail] = useState<RequestDetail | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -36,7 +36,7 @@ export default function NewRequestScreen() {
     router.replace(`/requests/${d.request.id}`);
   };
 
-  // 分岐するときは「その後でやりたいこと」を想定して、指定がなければ「やりたいこと」にする
+  // 分岐するときは「その後でやること」を想定して、指定がなければ提案型にする
   const initialKind: RequestKind = KINDS.includes(kind as RequestKind) ? (kind as RequestKind) : parent ? 'activity' : 'purchase';
   return (
     <>
@@ -45,7 +45,7 @@ export default function NewRequestScreen() {
           ⑂ 「{parentDetail.request.title}」#{parentDetail.request.id.slice(0, 7)} から分岐して作ります
         </Text>
       )}
-      <RequestForm parentId={parentDetail?.request.id} initialKind={initialKind} members={members} selfId={me.id} currency={me.family.currency} onSave={onSave} />
+      <RequestForm parentId={parentDetail?.request.id} initialKind={initialKind} initialTypeId={type} members={members} selfId={me.id} currency={me.family.currency} onSave={onSave} />
     </>
   );
 }

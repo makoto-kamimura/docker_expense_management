@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     auth::AuthUser,
     error::{ApiError, ApiResult},
-    handlers::{chores, labels::{labels_of, replace_labels}},
+    handlers::{chores, labels::{labels_of, replace_labels}, request_types},
     previews,
     models::{
         ActionInput, LinkPreview, RequestCategory, AlternativeInput, AlternativeProduct, Attachment, CommentInput, ListQuery,
@@ -192,7 +192,7 @@ async fn build_detail(state: &AppState, me: &Member, request: PurchaseRequest) -
             .await?;
     let timeline = timeline(state, id).await?;
     let permissions = permissions(me, &request, &reviewers);
-    const REF_SELECT: &str = "SELECT r.id, r.title, r.kind, r.status, u.name AS requester_name
+    const REF_SELECT: &str = "SELECT r.id, r.title, r.kind, r.type_id, r.status, u.name AS requester_name
            FROM purchase_requests r JOIN users u ON u.id = r.requester_id";
     // 分岐元・分岐先も、他人の下書きは見せない
     let parent: Option<RequestRef> = match request.parent_id {
@@ -303,6 +303,9 @@ pub async fn list(
     if let Some(kind) = q.kind {
         b.push(" AND r.kind = ").push_bind(kind);
     }
+    if let Some(type_id) = q.type_id {
+        b.push(" AND r.type_id = ").push_bind(type_id);
+    }
     if let Some(label) = q.label {
         b.push(" AND EXISTS (SELECT 1 FROM request_labels rl WHERE rl.request_id = r.id AND rl.label_id = ")
             .push_bind(label)
@@ -346,11 +349,14 @@ pub async fn get_one(
 pub async fn create(
     State(state): State<AppState>,
     AuthUser(me): AuthUser,
-    Json(input): Json<RequestInput>,
+    Json(mut input): Json<RequestInput>,
 ) -> ApiResult<Json<RequestDetail>> {
     if !me.can_request {
         return Err(ApiError::Forbidden);
     }
+    // 種類を決め、型 (入力項目・完了の表現) はその種類に合わせる
+    let (type_id, kind) = request_types::resolve(&state.db, me.family_id, input.type_id, input.kind, None).await?;
+    input.kind = kind;
     validate_input(&input)?;
     // 分岐元は同じ家族で見える稟議に限る (他の家族・他人の下書きは 404)
     let parent = match input.parent_id {
@@ -366,8 +372,8 @@ pub async fn create(
     let (id,): (Uuid,) = sqlx::query_as(
         "INSERT INTO purchase_requests
             (family_id, requester_id, title, reason, price, currency, seller, product_name,
-             product_url, category, planned_date, notes, kind, end_date, parent_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id",
+             product_url, category, planned_date, notes, kind, end_date, parent_id, type_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id",
     )
     .bind(me.family_id)
     .bind(me.id)
@@ -384,6 +390,7 @@ pub async fn create(
     .bind(input.kind)
     .bind(input.end_date)
     .bind(parent.as_ref().map(|p| p.id))
+    .bind(type_id)
     .fetch_one(&mut *tx)
     .await?;
     replace_reviewers(&mut tx, &me, id, &input.reviewer_ids).await?;
@@ -405,14 +412,21 @@ pub async fn update(
     State(state): State<AppState>,
     AuthUser(me): AuthUser,
     Path(id): Path<Uuid>,
-    Json(input): Json<RequestInput>,
+    Json(mut input): Json<RequestInput>,
 ) -> ApiResult<Json<RequestDetail>> {
-    validate_input(&input)?;
     let old = load_request(&state, &me, id).await?;
     let reviewers = reviewers_of(&state, id).await?;
     if !permissions(&me, &old, &reviewers).can_edit {
         return Err(deny(old.requester_id == me.id));
     }
+    let (type_id, kind) = request_types::resolve(&state.db, me.family_id, input.type_id, input.kind, old.type_id).await?;
+    input.kind = kind;
+    validate_input(&input)?;
+    let (old_type, new_type) = if old.type_id != Some(type_id) {
+        (request_types::name_of(&state.db, old.type_id).await?, request_types::name_of(&state.db, Some(type_id)).await?)
+    } else {
+        (None, None)
+    };
 
     // 変更履歴: 項目ごとに「変更前 → 変更後」を Activity に残す
     let mut changes: Vec<Value> = Vec::new();
@@ -423,6 +437,7 @@ pub async fn update(
     };
     diff("title", json!(old.title), json!(input.title.trim()));
     diff("kind", json!(old.kind), json!(input.kind));
+    diff("type", json!(old_type), json!(new_type));
     diff("reason", json!(old.reason), json!(input.reason.trim()));
     diff("price", json!(old.price), json!(input.price));
     diff("seller", json!(old.seller), json!(input.seller.trim()));
@@ -478,8 +493,8 @@ pub async fn update(
         "UPDATE purchase_requests
             SET title = $1, reason = $2, price = $3, seller = $4, product_name = $5,
                 product_url = $6, category = COALESCE($7, category), planned_date = $8, notes = $9,
-                kind = $10, end_date = $11
-          WHERE id = $12",
+                kind = $10, end_date = $11, type_id = $12
+          WHERE id = $13",
     )
     .bind(input.title.trim())
     .bind(input.reason.trim())
@@ -492,6 +507,7 @@ pub async fn update(
     .bind(clean(&input.notes))
     .bind(input.kind)
     .bind(input.end_date)
+    .bind(type_id)
     .bind(id)
     .execute(&mut *tx)
     .await?;
@@ -1016,6 +1032,7 @@ mod tests {
             family_id: Uuid::nil(),
             requester_id,
             kind: RequestKind::Purchase,
+            type_id: None,
             parent_id: None,
             title: String::new(),
             reason: String::new(),

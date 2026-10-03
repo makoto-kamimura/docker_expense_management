@@ -5,7 +5,7 @@ import { apiFetch, clearToken, getToken, linkPreviewUrl } from '@/api';
 import { money, timeAgo } from '@/format';
 import { Button, C, s, statusColor } from '@/components/ui';
 import { LabelList } from '@/components/Labels';
-import { FILTERS, KINDS, KIND_LABEL, KIND_TEXT, statusLabel, type Me, type RequestKind, type RequestListItem } from '@/types';
+import { FILTERS, statusLabel, typeOf, type Me, type RequestListItem, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
 
 /** トップ: 申請一覧 + フィルター (readme.md 8.6節) */
@@ -13,7 +13,9 @@ export default function RequestsScreen() {
   useTheme();
   const [items, setItems] = useState<RequestListItem[]>([]);
   const [filter, setFilter] = useState<string>('all');
-  const [kind, setKind] = useState<RequestKind | null>(null);
+  // 種類で絞り込む (種類の ID)
+  const [kind, setKind] = useState<string | null>(null);
+  const [types, setTypes] = useState<RequestType[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const [toReview, setToReview] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -22,12 +24,14 @@ export default function RequestsScreen() {
   const load = useCallback(async () => {
     try {
       setRefreshing(true);
-      const [data, review, self] = await Promise.all([
-        apiFetch<RequestListItem[]>(`/requests?filter=${filter}${kind ? `&kind=${kind}` : ''}`),
+      const [data, review, self, typeList] = await Promise.all([
+        apiFetch<RequestListItem[]>(`/requests?filter=${filter}${kind ? `&type=${kind}` : ''}`),
         apiFetch<RequestListItem[]>('/requests?filter=to_review'),
         apiFetch<Me>('/me'),
+        apiFetch<RequestType[]>('/request-types'),
       ]);
       setItems(data);
+      setTypes(typeList);
       setToReview(review.length);
       setMe(self);
       setTokenState(await getToken());
@@ -64,7 +68,7 @@ export default function RequestsScreen() {
               variant="primary"
               size="sm"
               style={{ flex: 1 }}
-              onPress={() => router.push(kind ? `/requests/new?kind=${kind}` : '/requests/new')}
+              onPress={() => router.push(kind ? `/requests/new?type=${kind}` : '/requests/new')}
             />
           )}
         </View>
@@ -81,11 +85,11 @@ export default function RequestsScreen() {
             );
           })}
           <View style={{ width: 1, backgroundColor: C.border, marginHorizontal: 4 }} />
-          {([null, ...KINDS] as (RequestKind | null)[]).map((k) => {
-            const on = k === kind;
+          {([null, ...types.filter((x) => !x.hidden || x.id === kind)] as (RequestType | null)[]).map((x) => {
+            const on = (x?.id ?? null) === kind;
             return (
-              <Pressable key={k ?? 'any'} onPress={() => setKind(k)} style={[s.chip, on && s.chipOn]}>
-                <Text style={[s.chipText, on && s.chipTextOn]}>{k ? KIND_LABEL[k] : 'すべての種類'}</Text>
+              <Pressable key={x?.id ?? 'any'} onPress={() => setKind(x?.id ?? null)} style={[s.chip, on && s.chipOn]}>
+                <Text style={[s.chipText, on && s.chipTextOn]}>{x ? `${x.icon} ${x.name}` : 'すべての種類'}</Text>
               </Pressable>
             );
           })}
@@ -110,7 +114,7 @@ export default function RequestsScreen() {
               />
             )}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: C.fg }}>{item.kind !== 'purchase' ? `${KIND_TEXT[item.kind].icon} ` : ''}{item.title}</Text>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: C.fg }}>{typeOf(types, item.type_id, item.kind).icon} {item.title}</Text>
               <Text style={{ fontSize: 16, fontWeight: '700', color: C.fg, marginTop: 2 }}>{money(item.actual_price ?? item.price, item.currency)}</Text>
               <Text style={[s.muted, { fontWeight: '600', color: statusColor(item.status) }]}>{statusLabel(item.kind, item.status)}</Text>
               <LabelList labels={item.labels} />

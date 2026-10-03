@@ -1,11 +1,10 @@
 'use client';
 import { useState, useTransition } from 'react';
 import {
-  KINDS,
   KIND_TEXT,
   type Label,
   type Member,
-  type RequestKind,
+  type RequestType,
 } from '@/lib/types';
 import LabelChip from './LabelChip';
 
@@ -17,7 +16,7 @@ export interface AlternativeDraft {
 }
 
 export interface RequestDraft {
-  kind?: RequestKind;
+  type_id?: string | null;
   title?: string;
   reason?: string;
   price?: number;
@@ -39,6 +38,7 @@ export default function RequestForm({
   defaults,
   members,
   labels,
+  types,
   selfId,
   currency,
   canSubmit = true,
@@ -48,8 +48,10 @@ export default function RequestForm({
   defaults?: RequestDraft;
   /** Reviewer 候補 (同じ家族のメンバー) */
   members: Member[];
-  /** 家族のラベル (付けるものを選ぶ) */
+  /** グループのラベル (付けるものを選ぶ) */
   labels: Label[];
+  /** 選べる種類 (表示中の種類と、編集中の稟議に付いている種類) */
+  types: RequestType[];
   selfId: string;
   currency: string;
   /** false なら「申請する」ボタンを出さない (Submitted 以降の状態では使わない想定) */
@@ -59,8 +61,11 @@ export default function RequestForm({
 }) {
   const [alternatives, setAlternatives] = useState<AlternativeDraft[]>(defaults?.alternatives ?? []);
   const [reviewers, setReviewers] = useState<string[]>(defaults?.reviewer_ids ?? []);
-  const [kind, setKind] = useState<RequestKind>(defaults?.kind ?? 'purchase');
+  const [typeId, setTypeId] = useState<string>(defaults?.type_id ?? types[0]?.id ?? '');
   const [labelIds, setLabelIds] = useState<string[]>(defaults?.label_ids ?? []);
+  const type = types.find((x) => x.id === typeId) ?? types[0];
+  // 入力項目や完了の表現は、種類の型で決まる
+  const kind = type?.base ?? 'purchase';
   const t = KIND_TEXT[kind];
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -107,21 +112,22 @@ export default function RequestForm({
     >
       {error && <div className="error" role="alert">{error}</div>}
       {parentId && <input type="hidden" name="parent_id" value={parentId} />}
+      <input type="hidden" name="kind" value={kind} />
 
       <div className="box">
         <div className="box-head"><h2>稟議の種類</h2></div>
         <div className="box-body">
           <div className="chips" role="radiogroup" aria-label="稟議の種類">
-            {KINDS.map((k) => (
-              <label key={k} className={`chip${kind === k ? ' chip-on' : ''}`}>
+            {types.map((x) => (
+              <label key={x.id} className={`chip${typeId === x.id ? ' chip-on' : ''}`}>
                 <input
                   type="radio"
-                  name="kind"
-                  value={k}
-                  checked={kind === k}
-                  onChange={() => setKind(k)}
+                  name="type_id"
+                  value={x.id}
+                  checked={typeId === x.id}
+                  onChange={() => setTypeId(x.id)}
                 />
-                {KIND_TEXT[k].icon} {KIND_TEXT[k].what}
+                {x.icon} {x.name}
               </label>
             ))}
           </div>
@@ -129,7 +135,7 @@ export default function RequestForm({
       </div>
 
       <div className="box">
-        <div className="box-head"><h2>{t.what}</h2></div>
+        <div className="box-head"><h2>{type ? `${type.icon} ${type.name}` : t.what}</h2></div>
         <div className="box-body">
           <div className="row">
             <label htmlFor="title">タイトル<span className="req">*</span></label>
