@@ -5,9 +5,11 @@ import { apiFetch, choreImageUrl, getToken } from '@/api';
 import { C, Card, s } from '@/components/ui';
 import type { ChoresResp } from '@/types';
 import { choreScheduleLabel } from '@/format';
+import { useTheme } from '@/theme';
 
 /** 家事の「きれいな状態の見本」(見るだけ。画像の追加・編集は Web で行う) */
 export default function ChoreDetailScreen() {
+  useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [d, setD] = useState<ChoresResp | null>(null);
   const [token, setToken] = useState<string | null>(null);

@@ -12,7 +12,8 @@ export type RequestStatus =
 
 export type RequestCategory =
   | 'home' | 'electronics' | 'hobby' | 'travel' | 'education' | 'other' | 'leisure' | 'dining';
-/** 稟議の種類: purchase = 買いたいもの / outing = 行きたいところ / activity = やりたいこと */
+/** 稟議の型 (入力項目と完了の表現を決める): purchase = 購入型 / outing = 外出・イベント型 / activity = 提案型。
+ * 種類 (RequestType) はグループごとに作れ、どれかの型を土台にする */
 export type RequestKind = 'purchase' | 'outing' | 'activity';
 export const KINDS: RequestKind[] = ['purchase', 'outing', 'activity'];
 export type ReviewerDecision = 'pending' | 'approved' | 'changes_requested' | 'rejected';
@@ -48,10 +49,28 @@ export interface UserRef {
   avatar_url: string | null;
 }
 
+/** 稟議の種類 (GET /request-types)。グループごとに管理者が作る (管理は Web の設定画面) */
+export interface RequestType {
+  id: string;
+  name: string;
+  icon: string;
+  base: RequestKind;
+  hidden: boolean;
+  request_count: number;
+}
+
+/** 種類を ID で引く。見つからなければ型の名前とアイコンで代わりにする */
+export function typeOf(types: RequestType[], id: string | null, kind: RequestKind): { name: string; icon: string } {
+  const t = types.find((x) => x.id === id);
+  return t ? { name: t.name, icon: t.icon } : { name: KIND_LABEL[kind], icon: KIND_TEXT[kind].icon };
+}
+
 export interface PurchaseRequest {
   id: string;
   requester_id: string;
   kind: RequestKind;
+  /** 種類 (request_types)。kind はその種類の型 */
+  type_id: string | null;
   /** 分岐元の稟議 */
   parent_id: string | null;
   title: string;
@@ -171,6 +190,7 @@ export interface RequestRef {
   id: string;
   title: string;
   kind: RequestKind;
+  type_id: string | null;
   status: RequestStatus;
   requester_name: string;
 }
@@ -247,22 +267,23 @@ export const STATUS_GROUP: Record<RequestStatus, StatusGroup> = {
 };
 
 export const CATEGORY_LABEL: Record<RequestCategory, string> = {
-  home: '家・生活',
-  electronics: '家電・ガジェット',
-  hobby: '趣味',
-  travel: '旅行',
-  education: '教育',
+  home: '生活・日用品',
+  electronics: '機器・ガジェット',
+  hobby: '趣味・娯楽',
+  travel: '旅行・移動',
+  education: '学び・教育',
   other: 'その他',
   leisure: 'レジャー',
-  dining: '外食',
+  dining: '飲食',
 };
 
 // カテゴリは廃止してラベルに移した。CATEGORY_LABEL は、以前の変更履歴 (カテゴリの変更) を表示するためだけに残している
 
+/** 型の名前 */
 export const KIND_LABEL: Record<RequestKind, string> = {
-  purchase: '買い物',
-  outing: 'お出かけ',
-  activity: 'やりたいこと',
+  purchase: '購入型',
+  outing: '外出・イベント型',
+  activity: '提案型',
 };
 
 export interface KindText {
@@ -315,7 +336,7 @@ export interface KindText {
 export const KIND_TEXT: Record<RequestKind, KindText> = {
   purchase: {
     icon: '🛍',
-    what: '買いたいもの',
+    what: '購入',
     titleExample: '例: グループ旅行用の新しいカメラ',
     price: '金額',
     priceShort: '金額',
@@ -357,7 +378,7 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
   },
   outing: {
     icon: '📍',
-    what: '行きたいところ',
+    what: '外出・イベント',
     titleExample: '例: 週末に水族館へ行きたい',
     price: '予算 (交通費・入場料など)',
     priceShort: '予算',
@@ -399,7 +420,7 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
   },
   activity: {
     icon: '✨',
-    what: 'やりたいこと',
+    what: '提案',
     titleExample: '例: ピアノを習いたい',
     price: '費用の見込み',
     priceShort: '費用',

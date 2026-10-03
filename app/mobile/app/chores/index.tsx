@@ -6,6 +6,7 @@ import { Avatar, Button, C, Card, s } from '@/components/ui';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
 import { CHORE_PERIOD_TABS, choreScheduleLabel, choreTimeTotalLabel, filterByPeriod, periodProgressLabel, type ChorePeriodTab } from '@/format';
 import type { ChoresResp, ChoreStatus, PushStatus } from '@/types';
+import { NEXT_THEME, THEME_LABEL, setThemeMode, useTheme } from '@/theme';
 
 type Filter = 'todo' | 'done' | 'all';
 const FILTERS: { key: Filter; label: string }[] = [
@@ -21,6 +22,7 @@ const pushWhat = (p: PushStatus) => (p.scope === 'all' ? '今日の家事' : `${
 
 /** 家事のコミット (Web の /chores と同じ内容。項目の管理は Web の設定画面で行う) */
 export default function ChoresScreen() {
+  const { mode: theme } = useTheme();
   const [d, setD] = useState<ChoresResp | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -90,6 +92,8 @@ export default function ChoresScreen() {
       <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
         <Button title="稟議" size="sm" onPress={() => router.push('/requests')} />
         <Button title="ダッシュボード" size="sm" onPress={() => router.push('/dashboard')} />
+        {/* 表示: 自動 (端末に合わせる) → ライト → ダーク */}
+        <Button title={`表示: ${THEME_LABEL[theme]}`} size="sm" onPress={() => setThemeMode(NEXT_THEME[theme])} />
       </View>
       <Card title={`今日の家事 (${d.today})`}>
         {active.length > 0 && (
@@ -99,7 +103,7 @@ export default function ChoresScreen() {
               <Text style={{ fontWeight: '600', color: C.fg }}>{done.length} / {active.length} コミット済み</Text>
               {remaining.length > 0 && <Text style={s.muted}>あと {remaining.length}件</Text>}
             </View>
-            <View style={{ height: 6, backgroundColor: '#eff2f5', borderRadius: 3, marginBottom: 10 }}>
+            <View style={{ height: 6, backgroundColor: C.neutralSubtle, borderRadius: 3, marginBottom: 10 }}>
               <View style={{ height: 6, width: `${(done.length / active.length) * 100}%`, backgroundColor: C.green, borderRadius: 3 }} />
             </View>
 
@@ -114,7 +118,7 @@ export default function ChoresScreen() {
                     onPress={() => setPeriod(t.key)}
                     accessibilityRole="tab"
                     accessibilityState={{ selected: on }}
-                    style={{ flex: 1, alignItems: 'center', paddingVertical: 7, borderBottomWidth: 2, borderBottomColor: on ? '#fd8c73' : 'transparent' }}
+                    style={{ flex: 1, alignItems: 'center', paddingVertical: 7, borderBottomWidth: 2, borderBottomColor: on ? C.underline : 'transparent' }}
                   >
                     <Text style={{ fontSize: 13, color: on ? C.fg : C.muted, fontWeight: on ? '700' : '400' }}>
                       {t.label} {filterByPeriod(active, t.key).length}{p?.pushed ? ` ${p.trophy_icon}` : ''}
@@ -175,7 +179,7 @@ export default function ChoresScreen() {
                   style={{
                     flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 8,
                     borderRadius: 6, marginBottom: 4,
-                    backgroundColor: c.committed_today ? '#dafbe1' : 'transparent',
+                    backgroundColor: c.committed_today ? C.successSubtle : 'transparent',
                   }}
                 >
                   {/* 名前・画像を押すと、きれいな状態の見本を確認できる */}
@@ -213,7 +217,7 @@ export default function ChoresScreen() {
                       hitSlop={8}
                       accessibilityRole="button"
                       accessibilityLabel={`${c.name}のコミットを取り消す`}
-                      style={{ borderWidth: 1, borderColor: '#4ac26b', backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, minWidth: 76, alignItems: 'center' }}
+                      style={{ borderWidth: 1, borderColor: C.successBorder, backgroundColor: C.card, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, minWidth: 76, alignItems: 'center' }}
                     >
                       <Text style={{ color: C.green, fontWeight: '600', fontSize: 13 }}>✓ 済み</Text>
                     </Pressable>
@@ -242,14 +246,14 @@ export default function ChoresScreen() {
           </Text>
         )}
         {pushSt?.can_push && (
-          <View style={{ marginTop: 12, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#c297ff', backgroundColor: '#fbefff', gap: 8 }}>
+          <View style={{ marginTop: 12, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: C.doneBorder, backgroundColor: C.doneSubtle, gap: 8 }}>
             <Text style={{ fontWeight: '700', color: C.fg }}>{pushWhat(pushSt)}を{pushSt.total}件すべてクリアしました！</Text>
             <Text style={[s.muted, { fontSize: 12 }]}>プッシュすると、{pushSt.period}の「{pushSt.trophy_label}」トロフィー {pushSt.trophy_icon} が実績として残ります。</Text>
             <Button title="🚀 プッシュする" variant="merge" busy={busy === 'push'} onPress={() => push(pushSt)} />
           </View>
         )}
         {pushSt?.pushed && (
-          <View style={{ marginTop: 12, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#d4a72c', backgroundColor: '#fff8c5', flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+          <View style={{ marginTop: 12, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: C.attentionBorder, backgroundColor: C.attentionSubtle, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
             <Text style={{ fontSize: 30 }}>{pushSt.trophy_icon}</Text>
             <View style={{ flex: 1 }}>
               <Text style={{ fontWeight: '700', color: C.fg }}>{pushSt.period}の「{pushSt.label}」はプッシュ済みです。「{pushSt.trophy_label}」トロフィーを獲得しました！</Text>

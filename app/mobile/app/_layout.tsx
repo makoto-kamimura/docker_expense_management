@@ -1,12 +1,30 @@
+import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { C } from '@/components/ui';
+import { loadTheme, useTheme } from '@/theme';
 
 export default function RootLayout() {
+  const { scheme } = useTheme();
+  // 保存した表示の設定を読んでから描画する (最初の一瞬だけ違う色で出ないように)
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    loadTheme().finally(() => setReady(true));
+  }, []);
+  if (!ready) return null;
+
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerStyle: { backgroundColor: '#f6f8fa' }, headerTintColor: '#1f2328', headerShadowVisible: true }}>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: C.bg },
+          headerTintColor: C.fg,
+          headerShadowVisible: true,
+          contentStyle: { backgroundColor: C.card },
+        }}
+      >
         <Stack.Screen name="index" options={{ title: 'RingiWoMerge' }} />
         <Stack.Screen name="onboarding" options={{ title: 'ようこそ', headerBackVisible: false }} />
         <Stack.Screen name="requests/index" options={{ title: '購入稟議', headerBackVisible: false }} />

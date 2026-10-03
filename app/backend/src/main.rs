@@ -88,6 +88,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/requests/:id/labels", put(handlers::labels::set_request_labels))
         .route("/labels", get(handlers::labels::list).post(handlers::labels::create))
         .route("/labels/:id", put(handlers::labels::update).delete(handlers::labels::delete))
+        .route("/request-types", get(handlers::request_types::list).post(handlers::request_types::create))
+        .route("/request-types/order", put(handlers::request_types::reorder))
+        .route("/request-types/:id", put(handlers::request_types::update).delete(handlers::request_types::delete))
         .route(
             "/requests/:id/attachments",
             post(handlers::attachments::upload).layer(DefaultBodyLimit::max(handlers::attachments::UPLOAD_BODY_LIMIT)),

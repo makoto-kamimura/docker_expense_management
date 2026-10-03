@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::hash_password,
-    handlers::{chores, family::generate_invite_code, labels},
+    handlers::{chores, family::generate_invite_code, labels, request_types},
     state::AppState,
 };
 
@@ -128,6 +128,8 @@ pub async fn seed(state: &AppState) -> anyhow::Result<()> {
     let mut conn = state.db.acquire().await?;
     chores::create_defaults(&mut conn, other).await?;
     labels::create_defaults(&mut conn, other).await?;
+    // デモの稟議にも種類を付ける
+    request_types::ensure_all(&state.db).await?;
     Ok(())
 }
 

@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { apiFetch } from '@/api';
 import {
-  KINDS,
   KIND_TEXT,
   type Label,
   type Member,
   type RequestDetail,
   type RequestKind,
+  type RequestType,
 } from '@/types';
 import { LabelChip } from './Labels';
 import { Button, C, Card, s } from './ui';
@@ -21,6 +21,7 @@ interface AltDraft {
 
 /** API の RequestInput */
 export interface RequestPayload {
+  type_id: string | null;
   kind: RequestKind;
   parent_id: string | null;
   title: string;
@@ -42,6 +43,7 @@ const opt = (v: string) => v.trim() || null;
 export default function RequestForm({
   initial,
   initialKind = 'purchase',
+  initialTypeId,
   parentId,
   members,
   selfId,
@@ -49,8 +51,10 @@ export default function RequestForm({
   onSave,
 }: {
   initial?: RequestDetail;
-  /** 新規作成時の種類 */
+  /** 新規作成時の型 (種類の指定がないとき、この型の最初の種類にする) */
   initialKind?: RequestKind;
+  /** 新規作成時の種類 */
+  initialTypeId?: string;
   /** 分岐元の稟議 (新規作成時のみ) */
   parentId?: string;
   members: Member[];
@@ -60,7 +64,21 @@ export default function RequestForm({
   onSave: (payload: RequestPayload, submit: boolean) => Promise<void>;
 }) {
   const r = initial?.request;
-  const [kind, setKind] = useState<RequestKind>(r?.kind ?? initialKind);
+  // グループの種類 (表示中のものと、編集中の稟議に付いているもの) から選ぶ
+  const [types, setTypes] = useState<RequestType[]>([]);
+  const [typeId, setTypeId] = useState<string | null>(r?.type_id ?? null);
+  useEffect(() => {
+    apiFetch<RequestType[]>('/request-types')
+      .then((all) => {
+        const list = all.filter((x) => !x.hidden || x.id === r?.type_id);
+        setTypes(list);
+        setTypeId((cur) => cur ?? (list.find((x) => x.id === initialTypeId) ?? list.find((x) => x.base === initialKind) ?? list[0])?.id ?? null);
+      })
+      .catch(() => setTypes([]));
+  }, []);
+  const type = types.find((x) => x.id === typeId);
+  // 入力項目や完了の表現は、種類の型で決まる
+  const kind: RequestKind = type?.base ?? r?.kind ?? initialKind;
   const [endDate, setEndDate] = useState(r?.end_date ?? '');
   const t = KIND_TEXT[kind];
   const [title, setTitle] = useState(r?.title ?? '');
@@ -99,6 +117,7 @@ export default function RequestForm({
     try {
       await onSave(
         {
+          type_id: typeId,
           kind,
           parent_id: parentId ?? null,
           title: title.trim(),
@@ -132,22 +151,22 @@ export default function RequestForm({
       {error && <Text style={s.error}>{error}</Text>}
 
       <Card title="稟議の種類">
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {KINDS.map((k) => (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {types.map((x) => (
             <Pressable
-              key={k}
-              onPress={() => setKind(k)}
-              style={[s.chip, kind === k && s.chipOn, { flex: 1, alignItems: 'center' }]}
+              key={x.id}
+              onPress={() => setTypeId(x.id)}
+              style={[s.chip, typeId === x.id && s.chipOn, { alignItems: 'center' }]}
               accessibilityRole="radio"
-              accessibilityState={{ checked: kind === k }}
+              accessibilityState={{ checked: typeId === x.id }}
             >
-              <Text style={[s.chipText, kind === k && s.chipTextOn]}>{KIND_TEXT[k].icon} {KIND_TEXT[k].what}</Text>
+              <Text style={[s.chipText, typeId === x.id && s.chipTextOn]}>{x.icon} {x.name}</Text>
             </Pressable>
           ))}
         </View>
       </Card>
 
-      <Card title={t.what}>
+      <Card title={type ? `${type.icon} ${type.name}` : t.what}>
         <Text style={[s.label, { marginTop: 0 }]}>タイトル *</Text>
         <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder={t.titleExample} />
         <Text style={s.label}>{t.price} * ({currency === 'JPY' ? '円' : currency})</Text>

@@ -2,8 +2,6 @@ import { Text, View } from 'react-native';
 import { C, s } from '@/components/ui';
 import type { ContributionDay, ContributionSummary } from '@/types';
 
-// Web (ContributionGraph.tsx) と同じ草の濃さ
-const LEVEL = ['#eff2f5', '#aceebb', '#4ac26b', '#2da44e', '#116329'];
 
 /** GitHub 風の草グラフ。列 = 週 (日曜始まり)、行 = 曜日 */
 export function ContributionGraph({ days, cell = 10 }: { days: ContributionDay[]; cell?: number }) {
@@ -20,9 +18,9 @@ export function ContributionGraph({ days, cell = 10 }: { days: ContributionDay[]
             <View
               key={d.date}
               style={{
-                width: cell, height: cell, borderRadius: 2, backgroundColor: LEVEL[Math.min(d.count, 4)],
+                width: cell, height: cell, borderRadius: 2, backgroundColor: C.contrib[Math.min(d.count, 4)],
                 // プッシュした日は金色の枠
-                ...(d.pushed ? { borderWidth: 2, borderColor: '#d4a72c' } : {}),
+                ...(d.pushed ? { borderWidth: 2, borderColor: C.attentionBorder } : {}),
               }}
             />
           ))}
@@ -41,7 +39,7 @@ export function ChoreBadges({ c, compact }: { c: ContributionSummary; compact?: 
         {c.trophy_counts.length > 0 && (
           <Text style={s.muted}> ({c.trophy_counts.map((t) => `${t.icon}${t.count}`).join(' ')})</Text>
         )}{'   '}
-        <Text style={{ fontWeight: '700', fontSize: 16, color: c.current_streak > 0 ? '#bc4c00' : C.fg }}>🔥 {c.current_streak}</Text>日連続
+        <Text style={{ fontWeight: '700', fontSize: 16, color: c.current_streak > 0 ? C.severe : C.fg }}>🔥 {c.current_streak}</Text>日連続
         {'   '}<Text style={{ fontWeight: '700', fontSize: 16 }}>{c.last_30_days}</Text>日<Text style={s.muted}> / 直近30日</Text>
         {!compact && (
           <>
@@ -53,7 +51,7 @@ export function ChoreBadges({ c, compact }: { c: ContributionSummary; compact?: 
       {c.badges.length > 0 ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {c.badges.map((b) => (
-            <Text key={b.key} style={{ backgroundColor: '#fff8c5', color: C.yellow, borderColor: '#d4a72c66', borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1, fontSize: 12, overflow: 'hidden' }}>
+            <Text key={b.key} style={{ backgroundColor: C.attentionSubtle, color: C.yellow, borderColor: C.attentionBorderMuted, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1, fontSize: 12, overflow: 'hidden' }}>
               {b.icon} {b.label}
             </Text>
           ))}

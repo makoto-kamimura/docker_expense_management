@@ -8,6 +8,7 @@ use crate::{
     handlers::{
         chores,
         labels,
+        request_types,
         family::{family_info, generate_invite_code},
     },
     models::{AuthResp, LoginReq, MeResp, RegisterReq, User},
@@ -52,6 +53,7 @@ pub async fn register(
                     .await?;
             chores::create_defaults(&mut tx, id).await?;
             labels::create_defaults(&mut tx, id).await?;
+            request_types::create_defaults(&mut tx, id).await?;
             (id, true)
         }
         (None, Some(code)) => {
