@@ -17,11 +17,11 @@ export default function OnboardingScreen() {
   const st = STEPS[step];
   const last = step === STEPS.length - 1;
 
-  const finish = async (next: '/requests' | '/requests/new') => {
+  const finish = async (next: '/chores' | '/requests/new') => {
     setBusy(true);
     try {
       await apiFetch('/me/onboarded', { method: 'POST', body: '{}' });
-      router.replace('/requests');
+      router.replace('/chores');
       if (next === '/requests/new') router.push('/requests/new');
     } finally {
       setBusy(false);
@@ -44,7 +44,7 @@ export default function OnboardingScreen() {
           <Button title="次へ" variant="primary" onPress={() => setStep(step + 1)} />
         )}
         {step > 0 && <Button title="戻る" onPress={() => setStep(step - 1)} />}
-        <Text style={[s.link, { textAlign: 'center', marginTop: 12 }]} onPress={() => finish('/requests')}>あとで見る</Text>
+        <Text style={[s.link, { textAlign: 'center', marginTop: 12 }]} onPress={() => finish('/chores')}>あとで見る</Text>
       </View>
     </View>
   );

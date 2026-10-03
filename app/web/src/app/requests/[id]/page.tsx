@@ -196,7 +196,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
               )}
             </h3>
             <div className="label-list">
-              {d.labels.map((l) => <LabelChip key={l.id} label={l} href={`/?label=${l.id}`} />)}
+              {d.labels.map((l) => <LabelChip key={l.id} label={l} href={`/requests?label=${l.id}`} />)}
               {r.kind !== 'purchase' && <span className="label label-outing">{t.icon} {KIND_LABEL[r.kind]}</span>}
               {d.labels.length === 0 && r.kind === 'purchase' && <span className="muted">なし</span>}
             </div>

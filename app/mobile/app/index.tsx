@@ -5,7 +5,7 @@ import { apiFetch, getToken, setToken } from '@/api';
 import { Button, C, s } from '@/components/ui';
 import type { Me, Member } from '@/types';
 
-/** ログイン。初回はオンボーディングへ、それ以外は申請一覧へ進む。 */
+/** ログイン。初回はオンボーディングへ、それ以外はマイページ (家事) へ進む。 */
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,12 +13,18 @@ export default function LoginScreen() {
 
   const next = async () => {
     const me = await apiFetch<Me>('/me');
-    router.replace(me.onboarded ? '/requests' : '/onboarding');
+    router.replace(me.onboarded ? '/chores' : '/onboarding');
   };
 
   useEffect(() => {
     (async () => {
-      if (await getToken()) next().catch(() => {});
+      if (!(await getToken())) return;
+      // 使っている間はログインを延ばす (最後に使ってから14日・ログインから30日まで)。切れていればログイン画面のまま
+      try {
+        const res = await apiFetch<{ token: string }>('/auth/refresh', { method: 'POST', body: '{}' });
+        await setToken(res.token);
+        await next();
+      } catch {}
     })();
   }, []);
 

@@ -4,18 +4,13 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { apiFetch, getApiBase } from './api';
+import { COOKIE_NAME, COOKIE_OPTIONS } from './auth-cookie';
 import type { Member, PushScope, RequestDetail } from './types';
 
-const COOKIE_NAME = 'token';
 type Result = { error?: string };
 
 function setTokenCookie(token: string) {
-  cookies().set(COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 12,
-  });
+  cookies().set(COOKIE_NAME, token, COOKIE_OPTIONS);
 }
 
 /** API 呼び出しを包み、失敗したらフォームに表示するエラーを返す */
@@ -52,7 +47,7 @@ export async function loginAction(formData: FormData): Promise<Result> {
   } catch (e) {
     return { error: (e as Error).message };
   }
-  redirect('/');
+  redirect('/chores');
 }
 
 export async function registerAction(formData: FormData): Promise<Result> {
@@ -143,14 +138,14 @@ export async function saveRequestAction(id: string | null, formData: FormData): 
   } catch (e) {
     return { error: (e as Error).message };
   }
-  revalidatePath('/');
+  revalidatePath('/requests');
   redirect(`/requests/${saved.request.id}`);
 }
 
 export async function deleteRequestAction(id: string) {
   await apiFetch(`/requests/${id}`, { method: 'DELETE' });
-  revalidatePath('/');
-  redirect('/');
+  revalidatePath('/requests');
+  redirect('/requests');
 }
 
 /** 詳細画面のボタン操作 (submit / approve / request-changes / reject / merge / close) */
@@ -166,7 +161,7 @@ export async function requestActionAction(
     }),
   );
   revalidatePath(`/requests/${id}`);
-  revalidatePath('/');
+  revalidatePath('/requests');
   return r;
 }
 
@@ -191,7 +186,7 @@ export async function markPurchasedAction(id: string, formData: FormData): Promi
     }),
   );
   if (r.error) return r;
-  revalidatePath('/');
+  revalidatePath('/requests');
   redirect(`/requests/${id}`);
 }
 
@@ -361,7 +356,7 @@ export async function setRequestLabelsAction(requestId: string, labelIds: string
     apiFetch(`/requests/${requestId}/labels`, { method: 'PUT', body: JSON.stringify({ label_ids: labelIds }) }),
   );
   revalidatePath(`/requests/${requestId}`);
-  revalidatePath('/');
+  revalidatePath('/requests');
   return r;
 }
 

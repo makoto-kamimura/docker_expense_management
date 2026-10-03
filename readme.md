@@ -225,8 +225,9 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 |---|---|---|
 | ログイン | `/login` | |
 | 登録 | `/register` | 家族の作成か、招待コードでの参加 |
+| トップ | `/` | ログイン中はマイページへ移動する。未ログインなら紹介ページ |
 | オンボーディング | `/onboarding` | 初回の3ステップの説明 |
-| 稟議の一覧 | `/` | フィルター・種類・ラベルでの絞り込み。`?filter=to_review` は「レビュー」タブ |
+| 稟議の一覧 | `/requests` | フィルター・種類・ラベルでの絞り込み。`?filter=to_review` は「レビュー」タブ |
 | 新しい稟議 | `/requests/new` | `?parent=<id>` で分岐 |
 | 稟議の詳細 | `/requests/[id]` | 会話（タイムライン）・サイドバー（レビュアー・ラベル・申請者の家事）・マージボックス |
 | 変更履歴 | `/requests/[id]/history` | 詳細の「履歴」タブ |
@@ -234,7 +235,7 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 | 購入済みにする | `/requests/[id]/purchase` | |
 | まとめ資料 | `/requests/[id]/summary` | スライド・投影モード・印刷 |
 | ダッシュボード | `/dashboard` | |
-| マイページ | `/chores` | 今日の家事・実績。`?period=day\|week\|month` |
+| マイページ | `/chores` | 今日の家事・実績。`?period=day\|week\|month`。ログイン後の最初の画面 |
 | 家事の見本 | `/chores/[id]` | きれいな状態の見本画像 |
 | 設定 | `/settings` | 家族・メンバー・招待コード・ラベル・家事の項目 |
 
@@ -251,7 +252,7 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 | 変更履歴 | |
 | まとめ資料 | |
 | ダッシュボード | |
-| マイページ | 1行1家事の一覧と「まだ / 済み / すべて」の絞り込み |
+| マイページ | 1行1家事の一覧と「まだ / 済み / すべて」の絞り込み。ログイン後の最初の画面 |
 | 家事の見本 | 見本画像の閲覧 |
 
 家族の作成・メンバー管理・ラベルと家事の項目の管理は、Web の設定画面で行う。
@@ -262,7 +263,7 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 
 - メールアドレス・パスワード・名前で登録し、同時に家族を作るか、招待コードで参加する。
 - 1人のユーザーは1つの家族に所属する。
-- ログインの有効期間は12時間。
+- ログインは最長30日維持する。14日間使わなければ切れ、使っている間は自動で延びる。
 
 ### 6.2 オンボーディング
 
@@ -718,11 +719,14 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 
 | クライアント | 方式 | トークンの保存場所 |
 |---|---|---|
-| Web | サーバーアクションで API にログインし、JWT を Cookie に保存。サーバー側から `Authorization: Bearer` で API を呼ぶ | HttpOnly・SameSite=Lax の Cookie（12時間） |
+| Web | サーバーアクションで API にログインし、JWT を Cookie に保存。サーバー側から `Authorization: Bearer` で API を呼ぶ | HttpOnly・SameSite=Lax の Cookie（30日） |
 | モバイル | `Authorization: Bearer` | expo-secure-store |
 
 - パスワードは Argon2id でハッシュにする。
-- JWT（HS256、有効期間12時間）には、ユーザーの ID だけを入れる。家族と権限は、リクエストのたびに DB（`family_members`）から読むので、権限の変更がすぐに反映される。
+- JWT（HS256）には、ユーザーの ID・発行時刻・ログインした時刻だけを入れる。家族と権限は、リクエストのたびに DB（`family_members`）から読むので、権限の変更がすぐに反映される。
+- トークンの有効期限は「発行から14日」と「ログインから30日」の早いほう。使っている間は `POST /auth/refresh` で新しいトークンに替える（ログインした時刻は変わらないので、ログインから30日で必ず切れる）。
+  - Web: middleware が、発行から1日以上たったトークンを、ページを開いたときに更新して Cookie を差し替える。
+  - モバイル: アプリを開いたときに更新する。
 - `JWT_SECRET` を変えると、発行済みのトークンはすべて無効になる。
 
 ## 19. 機能ごとの実装方針
@@ -802,7 +806,7 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 ## 21. API
 
 - ベースパスは、Nginx 経由では `/api/`、API に直接つなぐときは `/`。
-- `/health`・`/auth/*`・`/attachments/:id/raw`（署名で確認）以外は `Authorization: Bearer <JWT>` が必要。
+- `/health`・`/auth/register`・`/auth/login`・`/attachments/:id/raw`（署名で確認）以外は `Authorization: Bearer <JWT>` が必要。
 - エラーは `{"error": "..."}` と HTTP ステータス（400 / 401 / 403 / 404 / 409）で返す。
 
 ### 21.1 認証・アカウント
@@ -812,6 +816,7 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 | GET | `/health` | ヘルスチェック |
 | POST | `/auth/register` | 登録（家族の作成か、招待コードでの参加） |
 | POST | `/auth/login` | ログイン（JWT を返す） |
+| POST | `/auth/refresh` | ログインの延長（新しい JWT を返す） |
 | GET | `/me` | ログインユーザーと権限 |
 | POST | `/me/onboarded` | オンボーディングの完了 |
 
@@ -897,7 +902,7 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 ### 22.2 セキュリティ
 
 - 家族ごとにデータを分離し、どの API もログインユーザーの家族で絞り込む。
-- パスワードは Argon2id、トークンは JWT（12時間）。Web は HttpOnly の Cookie に保存する。
+- パスワードは Argon2id、トークンは JWT（最後に使ってから14日・ログインから最長30日）。Web は HttpOnly の Cookie に保存する。
 - URL は http / https だけを受け付ける（画面の `href` に `javascript:` などを入れさせない）。
 - 添付は画像（SVG を除く）と PDF に限り、`X-Content-Type-Options: nosniff` を付ける。埋め込みには有効期間5分の署名付きリンクを使う。
 - リンクプレビューの取得は SSRF 対策をした上で行う（[19.3節](#193-リンクプレビューの取得)）。

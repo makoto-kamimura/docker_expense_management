@@ -37,7 +37,7 @@ export default function Onboarding({ name, familyName }: { name: string; familyN
               <button type="button" className="btn-primary" onClick={() => setStep(step + 1)}>次へ</button>
             )}
           </div>
-          <button type="button" className="btn-link small" style={{ marginTop: 16 }} disabled={pending} onClick={() => finish('/')}>
+          <button type="button" className="btn-link small" style={{ marginTop: 16 }} disabled={pending} onClick={() => finish('/chores')}>
             あとで見る
           </button>
         </div>

@@ -74,3 +74,4 @@ RingiWoMerge の MVP と拡張機能（[readme 第16章](../../readme.md#16-開�
 - [x] モバイルを Expo SDK 57 に更新（React Native 0.86・TypeScript 6.0）
 - [x] 修正：添付のアップロードが 1〜2MB を超えると失敗する（Next のサーバーアクションと axum の本文の上限を広げた）
 - [x] 修正：モバイルでログインできない（公開デモの接続先を `EXPO_PUBLIC_API_BASE_URL` で指定）
+- [x] ログイン後の最初の画面をマイページにし（Web の稟議一覧は `/requests` に移動）、ログインを最長30日維持する
