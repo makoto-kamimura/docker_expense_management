@@ -3,10 +3,12 @@ import { ActivityIndicator, Alert, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { apiFetch } from '@/api';
 import RequestForm, { type RequestPayload } from '@/components/RequestForm';
-import { s } from '@/components/ui';
+import { C, s } from '@/components/ui';
 import { KINDS, type Me, type Member, type RequestDetail, type RequestKind } from '@/types';
+import { useTheme } from '@/theme';
 
 export default function NewRequestScreen() {
+  useTheme();
   const { kind, parent } = useLocalSearchParams<{ kind?: string; parent?: string }>();
   const [parentDetail, setParentDetail] = useState<RequestDetail | null>(null);
   const [me, setMe] = useState<Me | null>(null);
@@ -39,7 +41,7 @@ export default function NewRequestScreen() {
   return (
     <>
       {parentDetail && (
-        <Text style={{ backgroundColor: '#ddf4ff', padding: 10, fontSize: 13 }}>
+        <Text style={{ backgroundColor: C.accentSubtle, color: C.fg, padding: 10, fontSize: 13 }}>
           ⑂ 「{parentDetail.request.title}」#{parentDetail.request.id.slice(0, 7)} から分岐して作ります
         </Text>
       )}

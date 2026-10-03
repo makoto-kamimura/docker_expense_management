@@ -3,12 +3,14 @@ import { Alert, FlatList, Image, Pressable, RefreshControl, ScrollView, Text, Vi
 import { router, useFocusEffect } from 'expo-router';
 import { apiFetch, clearToken, getToken, linkPreviewUrl } from '@/api';
 import { money, timeAgo } from '@/format';
-import { Button, C, STATUS_COLOR, s } from '@/components/ui';
+import { Button, C, s, statusColor } from '@/components/ui';
 import { LabelList } from '@/components/Labels';
 import { FILTERS, KINDS, KIND_LABEL, KIND_TEXT, statusLabel, type Me, type RequestKind, type RequestListItem } from '@/types';
+import { useTheme } from '@/theme';
 
 /** トップ: 申請一覧 + フィルター (readme.md 8.6節) */
 export default function RequestsScreen() {
+  useTheme();
   const [items, setItems] = useState<RequestListItem[]>([]);
   const [filter, setFilter] = useState<string>('all');
   const [kind, setKind] = useState<RequestKind | null>(null);
@@ -74,7 +76,7 @@ export default function RequestsScreen() {
             const label = f.key === 'to_review' && toReview > 0 ? `${f.label}（${toReview}）` : f.label;
             return (
               <Pressable key={f.key} onPress={() => setFilter(f.key)} style={[s.chip, on && { backgroundColor: C.fg, borderColor: C.fg }]}>
-                <Text style={[s.chipText, on && { color: '#fff', fontWeight: '600' }]}>{label}</Text>
+                <Text style={[s.chipText, on && { color: C.card, fontWeight: '600' }]}>{label}</Text>
               </Pressable>
             );
           })}
@@ -98,9 +100,9 @@ export default function RequestsScreen() {
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push(`/requests/${item.id}`)}
-            style={{ backgroundColor: '#fff', borderColor: C.border, borderWidth: 1, borderRadius: 6, padding: 12, marginBottom: 8, flexDirection: 'row', gap: 10 }}
+            style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 6, padding: 12, marginBottom: 8, flexDirection: 'row', gap: 10 }}
           >
-            <View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 6, backgroundColor: STATUS_COLOR[item.status] }} />
+            <View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 6, backgroundColor: statusColor(item.status) }} />
             {item.preview_id && (
               <Image
                 source={{ uri: linkPreviewUrl(item.preview_id), headers: token ? { Authorization: `Bearer ${token}` } : undefined }}
@@ -110,7 +112,7 @@ export default function RequestsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 16, fontWeight: '600', color: C.fg }}>{item.kind !== 'purchase' ? `${KIND_TEXT[item.kind].icon} ` : ''}{item.title}</Text>
               <Text style={{ fontSize: 16, fontWeight: '700', color: C.fg, marginTop: 2 }}>{money(item.actual_price ?? item.price, item.currency)}</Text>
-              <Text style={[s.muted, { fontWeight: '600', color: STATUS_COLOR[item.status] }]}>{statusLabel(item.kind, item.status)}</Text>
+              <Text style={[s.muted, { fontWeight: '600', color: statusColor(item.status) }]}>{statusLabel(item.kind, item.status)}</Text>
               <LabelList labels={item.labels} />
               <Text style={s.muted}>
                 #{item.id.slice(0, 7)} · {item.requester_name} · レビュアー: {item.reviewer_names.join('、') || '—'}

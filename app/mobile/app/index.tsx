@@ -4,9 +4,11 @@ import { router } from 'expo-router';
 import { apiFetch, getToken, setToken } from '@/api';
 import { Button, C, s } from '@/components/ui';
 import type { Me, Member } from '@/types';
+import { useTheme } from '@/theme';
 
 /** ログイン。初回はオンボーディングへ、それ以外はマイページ (家事) へ進む。 */
 export default function LoginScreen() {
+  useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);

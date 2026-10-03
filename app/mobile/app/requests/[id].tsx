@@ -8,10 +8,12 @@ import { Avatar, Button, C, Card, Fact, StatusBadge, s } from '@/components/ui';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
 import { LabelEditor } from '@/components/Labels';
 import { DECISION_LABEL, KIND_TEXT, statusLabel, type Me, type RequestDetail } from '@/types';
+import { useTheme } from '@/theme';
 
 type Action = 'submit' | 'approve' | 'request-changes' | 'reject' | 'merge' | 'close' | 'reopen';
 
 export default function RequestDetailScreen() {
+  useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [d, setD] = useState<RequestDetail | null>(null);
   const [me, setMe] = useState<Me | null>(null);
@@ -94,7 +96,7 @@ export default function RequestDetailScreen() {
         #{r.id.slice(0, 7)} · 申請者: {d.requester.name} · レビュアー: {d.reviewers.map((x) => `${x.name}（${DECISION_LABEL[x.decision]}）`).join('、') || '—'}
       </Text>
 
-      <View style={{ backgroundColor: '#fff', borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+      <View style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 12 }}>
         <LabelEditor detail={d} onSaved={setD} />
       </View>
 
@@ -201,7 +203,7 @@ export default function RequestDetailScreen() {
         e.type === 'comment' ? (
           <View key={e.id} style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
             <Avatar name={e.user?.name ?? '?'} size={28} />
-            <View style={{ flex: 1, backgroundColor: '#fff', borderColor: C.border, borderWidth: 1, borderRadius: 8 }}>
+            <View style={{ flex: 1, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8 }}>
               <Text style={{ backgroundColor: C.bg, padding: 8, fontSize: 13 }}>
                 <Text style={{ fontWeight: '700' }}>{e.user?.name ?? '退会したメンバー'}</Text> <Text style={s.muted}>{timeAgo(e.created_at)}にコメント</Text>
               </Text>
@@ -216,7 +218,7 @@ export default function RequestDetailScreen() {
       )}
 
       {/* 次にやること (Web の StatusPanel と同じ分岐) */}
-      <View style={{ backgroundColor: '#fff', borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 14, marginVertical: 12, gap: 8 }}>
+      <View style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 14, marginVertical: 12, gap: 8 }}>
         {r.status === 'draft' && (
           <>
             <Text style={{ fontWeight: '700' }}>この稟議は下書きです</Text>

@@ -7,8 +7,10 @@ import { C, Card, s } from '@/components/ui';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
 import type { ChoresResp, Dashboard } from '@/types';
 import { LabelChip } from '@/components/Labels';
+import { useTheme } from '@/theme';
 
 export default function DashboardScreen() {
+  useTheme();
   const [d, setD] = useState<Dashboard | null>(null);
   const [chores, setChores] = useState<ChoresResp | null>(null);
   useFocusEffect(useCallback(() => {
@@ -33,7 +35,7 @@ export default function DashboardScreen() {
     <ScrollView style={s.screen} contentContainerStyle={{ padding: 12 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
         {stats.map(([k, v]) => (
-          <View key={k} style={{ width: '48.5%', backgroundColor: '#fff', borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12 }}>
+          <View key={k} style={{ width: '48.5%', backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12 }}>
             <Text style={[s.muted, { fontWeight: '600', fontSize: 12 }]}>{k}</Text>
             <Text style={{ fontSize: 22, fontWeight: '600', color: C.fg }}>{v}</Text>
           </View>
@@ -56,7 +58,7 @@ export default function DashboardScreen() {
               <Text>{c.icon} {c.name}</Text>
               <Text style={{ fontWeight: '600' }}>{c.days}日{c.current_streak > 0 && <Text style={s.muted}> (🔥{c.current_streak})</Text>}</Text>
             </View>
-            <View style={{ height: 8, backgroundColor: '#eff2f5', borderRadius: 4, marginTop: 4 }}>
+            <View style={{ height: 8, backgroundColor: C.neutralSubtle, borderRadius: 4, marginTop: 4 }}>
               <View style={{ height: 8, width: `${(c.days / choreMax) * 100}%`, backgroundColor: C.green, borderRadius: 4 }} />
             </View>
           </View>
@@ -72,7 +74,7 @@ export default function DashboardScreen() {
               {c.label ? <LabelChip label={c.label} /> : <Text style={s.muted}>ラベルなし</Text>}
               <Text style={{ fontWeight: '600' }}>{money(c.total, d.currency)} <Text style={s.muted}>({c.count}件)</Text></Text>
             </View>
-            <View style={{ height: 8, backgroundColor: '#eff2f5', borderRadius: 4, marginTop: 4 }}>
+            <View style={{ height: 8, backgroundColor: C.neutralSubtle, borderRadius: 4, marginTop: 4 }}>
               <View style={{ height: 8, width: `${(c.total / max) * 100}%`, backgroundColor: C.purple, borderRadius: 4 }} />
             </View>
           </View>
