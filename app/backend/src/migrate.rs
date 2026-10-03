@@ -278,6 +278,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_request_types_family_name ON request_types
 ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS type_id UUID REFERENCES request_types(id);
 CREATE INDEX IF NOT EXISTS idx_requests_type ON purchase_requests(type_id);
 
+-- 初期ラベルを、グループの種類を問わない名前に変えた。名前と説明が以前の初期値のままのラベルだけを置き換える
+-- (同じグループに新しい名前のラベルがすでにあれば変えない。何度流しても同じ結果になる)
+UPDATE labels l SET name = v.new_name, description = v.new_desc
+  FROM (VALUES
+      ('誕生日・記念日', 'プレゼントやお祝い', '記念日・イベント', 'お祝いや行事に関係するもの'),
+      ('セール待ち', '安くなったら買いたい', 'タイミング待ち', 'セールや時期を待って決めたい'),
+      ('家・生活', '', '生活・日用品', ''),
+      ('家電・ガジェット', '', '機器・ガジェット', ''),
+      ('趣味', '', '趣味・娯楽', ''),
+      ('旅行', '', '旅行・移動', ''),
+      ('教育', '', '学び・教育', ''),
+      ('外食', '', '飲食', '')
+  ) AS v(old_name, old_desc, new_name, new_desc)
+ WHERE l.name = v.old_name AND l.description = v.old_desc
+   AND NOT EXISTS (SELECT 1 FROM labels o WHERE o.family_id = l.family_id AND lower(o.name) = lower(v.new_name));
+
 CREATE OR REPLACE TRIGGER trg_families_updated_at BEFORE UPDATE ON families
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE OR REPLACE TRIGGER trg_users_updated_at BEFORE UPDATE ON users

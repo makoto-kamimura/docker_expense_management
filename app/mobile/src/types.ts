@@ -267,14 +267,14 @@ export const STATUS_GROUP: Record<RequestStatus, StatusGroup> = {
 };
 
 export const CATEGORY_LABEL: Record<RequestCategory, string> = {
-  home: '家・生活',
-  electronics: '家電・ガジェット',
-  hobby: '趣味',
-  travel: '旅行',
-  education: '教育',
+  home: '生活・日用品',
+  electronics: '機器・ガジェット',
+  hobby: '趣味・娯楽',
+  travel: '旅行・移動',
+  education: '学び・教育',
   other: 'その他',
   leisure: 'レジャー',
-  dining: '外食',
+  dining: '飲食',
 };
 
 // カテゴリは廃止してラベルに移した。CATEGORY_LABEL は、以前の変更履歴 (カテゴリの変更) を表示するためだけに残している
