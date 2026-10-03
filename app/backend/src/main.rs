@@ -41,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(handlers::health::health))
         .route("/auth/register", post(handlers::auth::register))
         .route("/auth/login", post(handlers::auth::login))
+        .route("/auth/refresh", post(handlers::auth::refresh))
         .route("/me", get(handlers::auth::me))
         .route("/me/onboarded", post(handlers::auth::complete_onboarding))
         .route("/ocr", post(handlers::ocr::scan))

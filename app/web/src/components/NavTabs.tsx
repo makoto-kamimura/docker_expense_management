@@ -8,8 +8,8 @@ export default function NavTabs({ toReview }: { toReview: number }) {
   const filter = useSearchParams().get('filter');
   const tabs = [
     { href: '/dashboard', label: 'ダッシュボード', on: path.startsWith('/dashboard') },
-    { href: '/', label: '稟議', on: (path === '/' && filter !== 'to_review') || path.startsWith('/requests') },
-    { href: '/?filter=to_review', label: 'レビュー', on: path === '/' && filter === 'to_review', count: toReview },
+    { href: '/requests', label: '稟議', on: (path === '/requests' && filter !== 'to_review') || path.startsWith('/requests/') },
+    { href: '/requests?filter=to_review', label: 'レビュー', on: path === '/requests' && filter === 'to_review', count: toReview },
     { href: '/chores', label: 'マイページ', on: path.startsWith('/chores') },
     { href: '/settings', label: '設定', on: path.startsWith('/settings') },
   ];

@@ -86,6 +86,11 @@ export default function ChoresScreen() {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={{ padding: 12, paddingBottom: 48 }}>
+      {/* ログイン後はこの画面から始まるので、稟議とダッシュボードへの入り口を置く */}
+      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+        <Button title="稟議" size="sm" onPress={() => router.push('/requests')} />
+        <Button title="ダッシュボード" size="sm" onPress={() => router.push('/dashboard')} />
+      </View>
       <Card title={`今日の家事 (${d.today})`}>
         {active.length > 0 && (
           <>

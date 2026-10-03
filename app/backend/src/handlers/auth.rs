@@ -1,8 +1,9 @@
-use axum::{extract::State, Json};
+use axum::{extract::State, http::HeaderMap, Json};
+use chrono::Utc;
 use uuid::Uuid;
 
 use crate::{
-    auth::{hash_password, issue_token, load_member, verify_password, AuthUser},
+    auth::{bearer_claims, hash_password, issue_token, load_member, verify_password, AuthUser},
     error::{ApiError, ApiResult},
     handlers::{
         chores,
@@ -85,7 +86,7 @@ pub async fn register(
 
     let user = load_member(&state, user_id).await?.ok_or(ApiError::NotFound)?;
     Ok(Json(AuthResp {
-        token: issue_token(&state.config.jwt_secret, user_id)?,
+        token: issue_token(&state.config.jwt_secret, user_id, Utc::now().timestamp())?,
         user,
     }))
 }
@@ -108,7 +109,19 @@ pub async fn login(
     // 家族に所属していないユーザーはログインさせない
     let member = load_member(&state, user.id).await?.ok_or(ApiError::Unauthorized)?;
     Ok(Json(AuthResp {
-        token: issue_token(&state.config.jwt_secret, user.id)?,
+        token: issue_token(&state.config.jwt_secret, user.id, Utc::now().timestamp())?,
+        user: member,
+    }))
+}
+
+/// 使っている間はログインを延ばす。ログインした時刻はそのままなので、ログインから30日で切れる。
+pub async fn refresh(State(state): State<AppState>, headers: HeaderMap) -> ApiResult<Json<AuthResp>> {
+    let claims = bearer_claims(&headers, &state)?;
+    let member = load_member(&state, claims.sub).await?.ok_or(ApiError::Unauthorized)?;
+    // 以前の (ログインした時刻を持たない) トークンは、今ログインしたものとして扱う
+    let auth_time = if claims.auth_time > 0 { claims.auth_time } else { Utc::now().timestamp() };
+    Ok(Json(AuthResp {
+        token: issue_token(&state.config.jwt_secret, member.id, auth_time)?,
         user: member,
     }))
 }
