@@ -110,7 +110,7 @@ export default async function ChoresPage({ searchParams }: { searchParams: { per
       </div>
 
       <div className="box">
-        <div className="box-head"><h2>家族の実績</h2></div>
+        <div className="box-head"><h2>グループの実績</h2></div>
         {d.members.map((m) => (
           <div key={m.user.id} className="box-row chore-member">
             <div className="person" style={{ minWidth: 140 }}>

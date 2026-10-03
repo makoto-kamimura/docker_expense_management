@@ -49,7 +49,7 @@ export default function LoginScreen() {
       <View style={{ alignItems: 'center', marginVertical: 32 }}>
         <Text style={{ color: C.muted, fontWeight: '600' }}>稟議をマージ</Text>
         <Text style={{ fontSize: 30, fontWeight: '700', color: C.fg }}>RingiWoMerge</Text>
-        <Text style={s.muted}>大きな買い物は、家族のレビューを通してから。</Text>
+        <Text style={s.muted}>大きな買い物は、グループのレビューを通してから。</Text>
       </View>
       <Text style={s.label}>メールアドレス</Text>
       <TextInput style={s.input} value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" />
@@ -57,7 +57,7 @@ export default function LoginScreen() {
       <TextInput style={s.input} value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password" />
       <Button title="ログイン" variant="primary" onPress={onLogin} busy={busy} style={{ marginTop: 20 }} />
       <Text style={[s.muted, { marginTop: 16, textAlign: 'center' }]}>
-        家族の新規作成は Web から行えます。
+        グループの新規作成は Web から行えます。
       </Text>
     </KeyboardAvoidingView>
   );

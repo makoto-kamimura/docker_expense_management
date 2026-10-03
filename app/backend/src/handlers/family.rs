@@ -48,7 +48,7 @@ pub async fn update(
     auth.require_admin()?;
     let name = input.name.trim();
     if name.is_empty() {
-        return Err(ApiError::BadRequest("家族の名前を入力してください".into()));
+        return Err(ApiError::BadRequest("グループの名前を入力してください".into()));
     }
     sqlx::query("UPDATE families SET name = $1 WHERE id = $2")
         .bind(name)

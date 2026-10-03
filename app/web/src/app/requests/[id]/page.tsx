@@ -185,7 +185,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
             <ContributionGraph days={d.requester_contributions.calendar} small />
             <ChoreBadges c={d.requester_contributions} compact />
             <p className="muted" style={{ marginTop: 6 }}>
-              レビューの参考にしましょう。<Link href="/chores">家族の実績を見る</Link>
+              レビューの参考にしましょう。<Link href="/chores">グループの実績を見る</Link>
             </p>
           </div>
           <div className="side-section">
@@ -244,7 +244,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
           <div className="side-section">
             <h3>まとめ資料</h3>
             <Link href={`/requests/${r.id}/summary`}>スライドで見る</Link>
-            <p className="muted" style={{ marginTop: 4 }}>家族会議や印刷 (PDF) 用</p>
+            <p className="muted" style={{ marginTop: 4 }}>話し合いや印刷 (PDF) 用</p>
           </div>
         </aside>
       </div>

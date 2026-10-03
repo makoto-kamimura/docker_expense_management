@@ -178,7 +178,7 @@ export default function RequestDetailScreen() {
 
       <Card
         title="申請者の家事コミット"
-        right={<Text style={s.link} onPress={() => router.push('/chores')}>家族の実績</Text>}
+        right={<Text style={s.link} onPress={() => router.push('/chores')}>グループの実績</Text>}
       >
         <ContributionGraph days={d.requester_contributions.calendar} cell={8} />
         <ChoreBadges c={d.requester_contributions} compact />
@@ -270,11 +270,11 @@ export default function RequestDetailScreen() {
             <Text style={{ fontWeight: '700', color: C.green }}>✓ 承認されました</Text>
             <Text style={{ fontWeight: '700', color: C.purple, marginTop: 4 }}> マージできます</Text>
             <Text style={s.muted}>
-              マージすると、{t.thing}は家族に承認されたものとして扱われます (稟議成立)。
+              マージすると、{t.thing}はグループに承認されたものとして扱われます (稟議成立)。
             </Text>
             {p.can_merge ? (
               <Button title="マージする" variant="merge" busy={busy} onPress={() =>
-                confirm('この稟議をマージしますか？', `家族が${t.thing}に合意したことを確定します。`, 'マージする', () => run('merge'))} />
+                confirm('この稟議をマージしますか？', `グループが${t.thing}に合意したことを確定します。`, 'マージする', () => run('merge'))} />
             ) : (
               <Text style={s.muted}>マージできるのは申請者かレビュアーです。</Text>
             )}

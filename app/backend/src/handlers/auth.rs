@@ -28,7 +28,7 @@ pub async fn register(
     let invite_code = req.invite_code.as_deref().map(str::trim).filter(|s| !s.is_empty());
     if family_name.is_some() == invite_code.is_some() {
         return Err(ApiError::BadRequest(
-            "家族の名前 (新規作成) か招待コード (参加) のどちらかを入力してください".into(),
+            "グループの名前 (新規作成) か招待コード (参加) のどちらかを入力してください".into(),
         ));
     }
     let exists: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM users WHERE lower(email) = $1")

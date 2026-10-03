@@ -16,12 +16,12 @@ function Landing() {
       <section className="hero">
         <div className="eyebrow">稟議をマージ</div>
         <h1>RingiWoMerge</h1>
-        <p className="tagline">大きな買い物は、家族のレビューを通してから。</p>
+        <p className="tagline">大きな買い物は、グループのレビューを通してから。</p>
         <div className="flow" aria-label="使い方の流れ">
           <b>申請</b>→<b>レビュー</b>→<b>コメント</b>→<b>承認</b>→<b>マージ</b>→<b>購入・お出かけ</b>
         </div>
         <div className="actions" style={{ justifyContent: 'center' }}>
-          <Link className="btn btn-primary" href="/register">家族を作成して始める</Link>
+          <Link className="btn btn-primary" href="/register">グループを作成して始める</Link>
           <Link className="btn" href="/login">ログイン</Link>
         </div>
       </section>
@@ -29,12 +29,12 @@ function Landing() {
         <div className="step-card">
           <div className="n"><Octicon name="pencil" /></div>
           <h3>1. 稟議を作る</h3>
-          <p className="muted">買いたいもの・行きたいところを、金額・理由・URLと一緒に家族に伝えます。</p>
+          <p className="muted">買いたいもの・行きたいところを、金額・理由・URLと一緒にグループに伝えます。</p>
         </div>
         <div className="step-card">
           <div className="n"><Octicon name="eye" /></div>
           <h3>2. レビュー</h3>
-          <p className="muted">家族が金額・理由・リンク・資料を確認し、コメントで質問できます。</p>
+          <p className="muted">グループが金額・理由・リンク・資料を確認し、コメントで質問できます。</p>
         </div>
         <div className="step-card">
           <div className="n"><Octicon name="merge" /></div>
