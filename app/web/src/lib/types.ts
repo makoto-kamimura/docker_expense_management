@@ -107,6 +107,25 @@ export interface RequestListItem extends PurchaseRequest {
   /** 商品URL のプレビュー画像 ID */
   preview_id: string | null;
   labels: Label[];
+  /** 分岐元 (見えないときは null) */
+  parent: LinkedRequest | null;
+  /** 分岐先 (作成順。最大20件) */
+  children: LinkedRequest[];
+  /** 見える分岐先の数 (children より多ければ残りは詳細画面で見る) */
+  children_count: number;
+}
+
+/** 一覧の行に紐づいた稟議 (分岐元・分岐先) */
+export interface LinkedRequest {
+  id: string;
+  title: string;
+  kind: RequestKind;
+  type_id: string | null;
+  status: RequestStatus;
+  requester_name: string;
+  price: number;
+  actual_price: number | null;
+  currency: string;
 }
 
 /** 家族ごとのラベル (GitHub の Labels と同じく、稟議に複数付けられる) */
@@ -462,6 +481,22 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
 };
 
 /** 種類を考慮した状態ラベル (お出かけの完了は「行ってきた」) */
+/**
+ * レビューを依頼する (申請する) ときに足りない項目の名前。API の申請時のチェックと同じ条件。
+ * 空なら申請できる。ボタンを無効にせず、押したときにこれを伝える
+ */
+export function submitMissing(
+  t: KindText,
+  v: { reviewers: number; reason: string; seller: string; product: string },
+): string[] {
+  const missing: string[] = [];
+  if (t.sellerRequired && !v.seller.trim()) missing.push(t.seller);
+  if (t.productRequired && !v.product.trim()) missing.push(t.product);
+  if (!v.reason.trim()) missing.push(t.reason);
+  if (v.reviewers === 0) missing.push('レビュアー (1人以上)');
+  return missing;
+}
+
 export function statusLabel(kind: RequestKind, status: RequestStatus): string {
   return status === 'purchased' ? KIND_TEXT[kind].done : STATUS_LABEL[status];
 }

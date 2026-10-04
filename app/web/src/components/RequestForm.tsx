@@ -2,6 +2,7 @@
 import { useState, useTransition } from 'react';
 import {
   KIND_TEXT,
+  submitMissing,
   type Label,
   type Member,
   type RequestType,
@@ -83,6 +84,20 @@ export default function RequestForm({
         const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
         const fd = new FormData(e.currentTarget);
         fd.set('intent', submitter?.value ?? 'save');
+        if (submitter?.value === 'submit') {
+          // 申請に足りない項目があれば、保存する前に伝える (下書きだけ作られてエラーになるのを防ぐ)
+          const missing = submitMissing(t, {
+            reviewers: reviewers.length,
+            reason: String(fd.get('reason') ?? ''),
+            seller: String(fd.get('seller') ?? ''),
+            product: String(fd.get('product_name') ?? ''),
+          });
+          if (missing.length > 0) {
+            setError(`レビューを依頼するには、次を入力してください: ${missing.join('、')}`);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+        }
         fd.set(
           'alternatives_json',
           JSON.stringify(
@@ -280,6 +295,9 @@ export default function RequestForm({
       </div>
 
       <div className="actions" style={{ justifyContent: 'flex-end' }}>
+        {canSubmit && reviewers.length === 0 && (
+          <span className="muted small">レビューを依頼するには、レビュアーを1人以上選んでください</span>
+        )}
         <button type="submit" value="save" disabled={pending}>下書き保存</button>
         {canSubmit && (
           <button type="submit" value="submit" className="btn-primary" disabled={pending}>

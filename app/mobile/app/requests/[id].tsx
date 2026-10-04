@@ -186,6 +186,11 @@ export default function RequestDetailScreen() {
         )}
       </Card>
 
+      {/* 内容をコピーして新しい下書きを作る (どの状態の稟議からでもできる) */}
+      {me.can_request && (
+        <Button title="複製して下書きを作る" onPress={() => router.push(`/requests/new?copy=${r.id}`)} style={{ marginBottom: 12 }} />
+      )}
+
       <Card
         title="申請者の家事コミット"
         right={<Text style={s.link} onPress={() => router.push('/chores')}>グループの実績</Text>}
@@ -233,9 +238,13 @@ export default function RequestDetailScreen() {
             {p.can_edit && <Button title="編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
             {p.can_submit ? (
               <Button title="レビューを依頼する" variant="primary" busy={busy} onPress={() => run('submit')} />
-            ) : (
-              <Text style={s.muted}>レビューを依頼するには、レビュアーを1人以上選んでください。</Text>
-            )}
+            ) : p.can_edit ? (
+              // レビュアーがまだいないときは、ボタンの代わりに編集画面へ案内する
+              <>
+                <Text style={s.muted}>レビューを依頼するには、レビュアーを1人以上選んでください。</Text>
+                <Button title="レビュアーを選んで依頼する" variant="primary" onPress={() => router.push(`/requests/edit/${r.id}`)} />
+              </>
+            ) : null}
           </>
         )}
 

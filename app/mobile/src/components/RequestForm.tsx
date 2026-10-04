@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { apiFetch } from '@/api';
 import {
   KIND_TEXT,
+  submitMissing,
   type Label,
   type Member,
   type RequestDetail,
@@ -44,6 +45,7 @@ export default function RequestForm({
   initial,
   initialKind = 'purchase',
   initialTypeId,
+  copy,
   parentId,
   members,
   selfId,
@@ -55,6 +57,8 @@ export default function RequestForm({
   initialKind?: RequestKind;
   /** 新規作成時の種類 */
   initialTypeId?: string;
+  /** true なら initial は複製元 (保存すると新しい稟議になる。非表示の種類は選べない) */
+  copy?: boolean;
   /** 分岐元の稟議 (新規作成時のみ) */
   parentId?: string;
   members: Member[];
@@ -70,9 +74,14 @@ export default function RequestForm({
   useEffect(() => {
     apiFetch<RequestType[]>('/request-types')
       .then((all) => {
-        const list = all.filter((x) => !x.hidden || x.id === r?.type_id);
+        // 非表示の種類は、編集中の稟議に付いているときだけ選べる (複製では選べない)
+        const list = all.filter((x) => !x.hidden || (!copy && x.id === r?.type_id));
         setTypes(list);
-        setTypeId((cur) => cur ?? (list.find((x) => x.id === initialTypeId) ?? list.find((x) => x.base === initialKind) ?? list[0])?.id ?? null);
+        setTypeId((cur) => {
+          if (cur && list.some((x) => x.id === cur)) return cur;
+          const base = r?.kind ?? initialKind;
+          return (list.find((x) => x.id === initialTypeId) ?? list.find((x) => x.base === base) ?? list[0])?.id ?? null;
+        });
       })
       .catch(() => setTypes([]));
   }, []);
@@ -111,7 +120,16 @@ export default function RequestForm({
   const setAlt = (i: number, patch: Partial<AltDraft>) =>
     setAlts((prev) => prev.map((a, j) => (j === i ? { ...a, ...patch } : a)));
 
+  const scroll = useRef<ScrollView>(null);
+  // 申請に足りない項目 (ボタンは無効にせず、押したときと、ボタンの下に表示する)
+  const missing = submitMissing(t, { reviewers: reviewers.length, reason, seller, product: productName });
+
   const save = async (submit: boolean) => {
+    if (submit && missing.length > 0) {
+      setError(`レビューを依頼するには、次を入力してください: ${missing.join('、')}`);
+      scroll.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
     setBusy(submit ? 'submit' : 'save');
     setError(null);
     try {
@@ -144,10 +162,9 @@ export default function RequestForm({
     }
   };
 
-  const canSubmit = !!title.trim() && reviewers.length > 0;
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={{ padding: 12, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={scroll} style={s.screen} contentContainerStyle={{ padding: 12, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       {error && <Text style={s.error}>{error}</Text>}
 
       <Card title="稟議の種類">
@@ -262,7 +279,8 @@ export default function RequestForm({
       </Card>
 
       <View style={{ gap: 8 }}>
-        <Button title="レビューを依頼する" variant="primary" onPress={() => save(true)} disabled={!canSubmit || !!busy} busy={busy === 'submit'} />
+        <Button title="レビューを依頼する" variant="primary" onPress={() => save(true)} disabled={!title.trim() || !!busy} busy={busy === 'submit'} />
+        {missing.length > 0 && <Text style={s.muted}>レビューを依頼するには: {missing.join('、')} を入力してください</Text>}
         <Button title="下書き保存" onPress={() => save(false)} disabled={!title.trim() || !!busy} busy={busy === 'save'} />
       </View>
     </ScrollView>

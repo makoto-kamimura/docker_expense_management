@@ -252,6 +252,13 @@ pub async fn detail_json(state: &AppState, me: &Member, id: Uuid) -> ApiResult<J
 // 一覧・取得
 // ---------------------------------------------------------------------------
 
+/// 一覧の 1 行に付ける分岐先の数の上限
+const LINKED_CHILDREN_LIMIT: i64 = 20;
+/// 一覧の行に紐づいた稟議 (p = 稟議, pu = 申請者) の JSON
+const LINKED_JSON: &str = "json_build_object('id', p.id, 'title', p.title, 'kind', p.kind, 'type_id', p.type_id,
+        'status', p.status, 'requester_name', pu.name, 'price', p.price, 'actual_price', p.actual_price,
+        'currency', p.currency)";
+
 pub async fn list(
     State(state): State<AppState>,
     AuthUser(me): AuthUser,
@@ -268,7 +275,24 @@ pub async fn list(
                 COALESCE((SELECT json_agg(json_build_object('id', l.id, 'name', l.name, 'color', l.color, 'description', l.description)
                                           ORDER BY l.name)
                             FROM request_labels rl JOIN labels l ON l.id = rl.label_id
-                           WHERE rl.request_id = r.id), '[]'::json) AS labels
+                           WHERE rl.request_id = r.id), '[]'::json) AS labels,
+                COALESCE((SELECT ",
+    );
+    // 紐づいた稟議 (分岐元・分岐先)。詳細画面と同じく、他人の下書きは含めない
+    b.push(LINKED_JSON).push(
+        " FROM purchase_requests p JOIN users pu ON pu.id = p.requester_id
+           WHERE p.id = r.parent_id AND (p.status <> 'draft' OR p.requester_id = ",
+    );
+    // 分岐元がない・見えないときは JSON の null にする (Json<Option<_>> で受けるため)
+    b.push_bind(me.id).push(")), 'null'::json) AS parent, COALESCE((SELECT json_agg(x.j ORDER BY x.created_at) FROM (SELECT ");
+    b.push(LINKED_JSON).push(
+        " AS j, p.created_at FROM purchase_requests p JOIN users pu ON pu.id = p.requester_id
+           WHERE p.parent_id = r.id AND (p.status <> 'draft' OR p.requester_id = ",
+    );
+    b.push_bind(me.id).push(") ORDER BY p.created_at LIMIT ").push(LINKED_CHILDREN_LIMIT.to_string());
+    b.push(") x), '[]'::json) AS children, (SELECT COUNT(*) FROM purchase_requests p WHERE p.parent_id = r.id AND (p.status <> 'draft' OR p.requester_id = ");
+    b.push_bind(me.id).push(
+        ")) AS children_count
            FROM purchase_requests r JOIN users u ON u.id = r.requester_id
           WHERE r.family_id = ",
     );
