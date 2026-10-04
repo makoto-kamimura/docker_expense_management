@@ -8,6 +8,7 @@ import {
   type RequestType,
 } from '@/lib/types';
 import LabelChip from './LabelChip';
+import Markdown from './Markdown';
 
 export interface AlternativeDraft {
   name: string;
@@ -64,6 +65,9 @@ export default function RequestForm({
   const [reviewers, setReviewers] = useState<string[]>(defaults?.reviewer_ids ?? []);
   const [typeId, setTypeId] = useState<string>(defaults?.type_id ?? types[0]?.id ?? '');
   const [labelIds, setLabelIds] = useState<string[]>(defaults?.label_ids ?? []);
+  // 理由は Markdown で書ける。「書く / プレビュー」を切り替える (入力欄は隠すだけなので、値はフォームで送られる)
+  const [reasonText, setReasonText] = useState(defaults?.reason ?? '');
+  const [reasonPreview, setReasonPreview] = useState(false);
   const type = types.find((x) => x.id === typeId) ?? types[0];
   // 入力項目や完了の表現は、種類の型で決まる
   const kind = type?.base ?? 'purchase';
@@ -211,7 +215,13 @@ export default function RequestForm({
       </div>
 
       <div className="box">
-        <div className="box-head"><h2>{t.reason}<span className="req">*</span></h2></div>
+        <div className="box-head">
+          <h2>{t.reason}<span className="req">*</span></h2>
+          <nav className="md-tabs" aria-label={`${t.reason}の表示`}>
+            <button type="button" className={reasonPreview ? '' : 'on'} aria-pressed={!reasonPreview} onClick={() => setReasonPreview(false)}>書く</button>
+            <button type="button" className={reasonPreview ? 'on' : ''} aria-pressed={reasonPreview} onClick={() => setReasonPreview(true)}>プレビュー</button>
+          </nav>
+        </div>
         <div className="box-body">
           <div className="row" style={{ marginBottom: 8 }}>
             <label htmlFor="reason" className="sr-only">{t.reason}</label>
@@ -219,12 +229,21 @@ export default function RequestForm({
               id="reason"
               name="reason"
               rows={6}
-              defaultValue={defaults?.reason ?? ''}
+              value={reasonText}
+              onChange={(e) => setReasonText(e.target.value)}
               placeholder={t.reasonPlaceholder}
+              hidden={reasonPreview}
             />
+            {reasonPreview && (
+              <div className="md-preview">
+                {reasonText.trim() ? <Markdown>{reasonText}</Markdown> : <span className="muted">プレビューする内容がありません。</span>}
+              </div>
+            )}
           </div>
           <p className="muted small">
             {t.reasonHint}
+            <br />
+            Markdown が使えます（見出し <code>## </code>・箇条書き <code>- </code>・太字 <code>**太字**</code>・リンク <code>[文字](https://…)</code> など）。
           </p>
         </div>
       </div>

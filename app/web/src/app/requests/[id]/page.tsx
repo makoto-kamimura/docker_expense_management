@@ -18,6 +18,7 @@ import LinkCard, { Thumb } from '@/components/LinkCard';
 import ChoreBadges from '@/components/ChoreBadges';
 import ContributionGraph from '@/components/ContributionGraph';
 import DeleteRequestButton from '@/components/DeleteRequestButton';
+import Markdown from '@/components/Markdown';
 
 const DECISION_ICON: Record<ReviewerDecision, IconName> = {
   pending: 'dot',
@@ -73,7 +74,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
                 <span><strong>{d.requester.name}</strong> <span className="muted">の{t.reason}</span></span>
                 <span className="label label-muted">申請者</span>
               </div>
-              <div className="box-body pre">{r.reason || <span className="muted">{t.reason}はまだ書かれていません。</span>}</div>
+              <div className="box-body">{r.reason ? <Markdown>{r.reason}</Markdown> : <span className="muted">{t.reason}はまだ書かれていません。</span>}</div>
             </div>
           </div>
           </div>
