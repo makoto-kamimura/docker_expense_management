@@ -370,6 +370,8 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 
 種類とラベルでも絞り込める。一覧には、状態・金額・申請者・レビュアー・ラベル・リンクプレビューのサムネイルを表示する。
 
+分岐でつながった稟議（分岐元・分岐先）がある行には、下部に「⑂ 紐づいた稟議 N件」の折りたたみを出す。開くと、それぞれの状態・種類・タイトル・申請者・金額が見え、押すとその稟議を開く（分岐先は1行20件まで。他人の下書きは出さない）。
+
 ### 8.7 資料とレシート
 
 - 画像（JPG・PNG・WEBP・HEIC など。SVG は除く）と PDF を、1ファイル10MBまで添付できる。
@@ -845,7 +847,7 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 
 | メソッド | パス | 内容 |
 |---|---|---|
-| GET | `/requests` | 一覧（`filter`＝all / waiting / to_review / mine / approved / purchased / closed、`kind`、`label`） |
+| GET | `/requests` | 一覧（`filter`＝all / waiting / to_review / mine / approved / purchased / closed、`kind`、`type`、`label`）。各行に紐づいた稟議（`parent`・`children`・`children_count`）を含む |
 | POST | `/requests` | 作成（`parent_id` で分岐） |
 | GET / PUT / DELETE | `/requests/:id` | 詳細（権限・タイムライン・プレビュー・申請者の家事の実績を含む）・更新・削除（申請者・管理者） |
 | POST | `/requests/:id/submit` | 申請・再申請 |
