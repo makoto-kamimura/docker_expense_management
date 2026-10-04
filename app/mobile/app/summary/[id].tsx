@@ -7,6 +7,7 @@ import { AttachmentList } from '@/components/Attachments';
 import { C, StatusBadge, s } from '@/components/ui';
 import { DECISION_LABEL, KIND_TEXT, type RequestDetail } from '@/types';
 import { useTheme } from '@/theme';
+import Markdown from '@/components/Markdown';
 
 
 /** 申請のまとめ資料。横スワイプでスライドを切り替える (Web の Summary と同じ構成)。 */
@@ -57,7 +58,7 @@ export default function SummaryScreen() {
     </View>,
     <View key="reason">
       <H>{t.reason}</H>
-      <Text style={{ fontSize: 17, lineHeight: 26 }}>{r.reason || '—'}</Text>
+      {r.reason ? <Markdown fontSize={17}>{r.reason}</Markdown> : <Text style={{ fontSize: 17, lineHeight: 26, color: C.fg }}>—</Text>}
       {r.notes && <Text style={[s.muted, { marginTop: 16 }]}>メモ: {r.notes}</Text>}
     </View>,
     <View key="product">

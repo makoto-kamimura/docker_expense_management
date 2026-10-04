@@ -9,6 +9,7 @@ import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
 import { LabelEditor } from '@/components/Labels';
 import { DECISION_LABEL, KIND_TEXT, statusLabel, typeOf, type Me, type RequestDetail, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
+import Markdown from '@/components/Markdown';
 
 type Action = 'submit' | 'approve' | 'request-changes' | 'reject' | 'merge' | 'close' | 'reopen';
 
@@ -109,7 +110,7 @@ export default function RequestDetailScreen() {
       </View>
 
       <Card title={t.reason}>
-        <Text style={{ fontSize: 15, lineHeight: 22, color: C.fg }}>{r.reason || '—'}</Text>
+        {r.reason ? <Markdown>{r.reason}</Markdown> : <Text style={{ fontSize: 15, lineHeight: 22, color: C.fg }}>—</Text>}
       </Card>
 
       <Card

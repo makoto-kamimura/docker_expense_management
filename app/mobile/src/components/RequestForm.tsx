@@ -12,6 +12,7 @@ import {
 } from '@/types';
 import { LabelChip } from './Labels';
 import { Button, C, Card, s } from './ui';
+import Markdown from './Markdown';
 
 interface AltDraft {
   name: string;
@@ -103,6 +104,8 @@ export default function RequestForm({
   }, []);
   const [plannedDate, setPlannedDate] = useState(r?.planned_date ?? '');
   const [reason, setReason] = useState(r?.reason ?? '');
+  // 理由は Markdown で書ける。プレビューに切り替えて整った表示を確かめられる
+  const [reasonPreview, setReasonPreview] = useState(false);
   const [notes, setNotes] = useState(r?.notes ?? '');
   const [reviewers, setReviewers] = useState<string[]>(initial?.reviewers.map((x) => x.id) ?? []);
   const [alts, setAlts] = useState<AltDraft[]>(
@@ -221,14 +224,24 @@ export default function RequestForm({
         </View>
       </Card>
 
-      <Card title={`${t.reason} *`}>
-        <TextInput
-          style={[s.input, s.multi, { minHeight: 120 }]}
-          multiline
-          value={reason}
-          onChangeText={setReason}
-          placeholder={t.reasonPlaceholder}
-        />
+      <Card
+        title={`${t.reason} *`}
+        right={<Text style={s.link} onPress={() => setReasonPreview((p) => !p)}>{reasonPreview ? '書く' : 'プレビュー'}</Text>}
+      >
+        {reasonPreview ? (
+          <View style={{ minHeight: 120 }}>
+            {reason.trim() ? <Markdown>{reason}</Markdown> : <Text style={s.muted}>プレビューする内容がありません。</Text>}
+          </View>
+        ) : (
+          <TextInput
+            style={[s.input, s.multi, { minHeight: 120 }]}
+            multiline
+            value={reason}
+            onChangeText={setReason}
+            placeholder={t.reasonPlaceholder}
+          />
+        )}
+        <Text style={[s.muted, { marginTop: 6, fontSize: 12 }]}>Markdown が使えます（見出し「## 」・箇条書き「- 」・太字「**太字**」・リンク「[文字](https://…)」など）</Text>
       </Card>
 
       <Card

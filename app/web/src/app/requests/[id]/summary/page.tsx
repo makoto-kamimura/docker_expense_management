@@ -8,6 +8,7 @@ import Attachments from '@/components/Attachments';
 import LinkCard from '@/components/LinkCard';
 import { previewImagePath } from '@/lib/types';
 import SlideDeck from './slide-deck';
+import Markdown from '@/components/Markdown';
 
 
 
@@ -54,7 +55,7 @@ export default async function SummaryPage({ params }: { params: { id: string } }
         <div>
           <h2 className="slide-heading">{t.reason}</h2>
           <div className="slide-block">
-            <p className="pre" style={{ fontSize: 18 }}>{r.reason || '—'}</p>
+            {r.reason ? <Markdown className="markdown-lg">{r.reason}</Markdown> : <p style={{ fontSize: 18 }}>—</p>}
           </div>
           {r.notes && (
             <div className="slide-block" style={{ marginTop: 16 }}>
