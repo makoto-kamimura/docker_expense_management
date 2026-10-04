@@ -21,6 +21,10 @@ export default function RequestHeader({ d, canRequest }: { d: RequestDetail; can
                 <Octicon name="branch" /> 分岐
               </Link>
             )}
+            {canRequest && (
+              // 内容をコピーして新しい下書きを作る (どの状態の稟議からでもできる)
+              <Link className="btn btn-sm" href={`/requests/new?copy=${r.id}`}>複製</Link>
+            )}
             <Link className="btn btn-sm" href={`/requests/${r.id}/summary`}>まとめ資料</Link>
           </div>
         </div>
