@@ -17,7 +17,7 @@ export function AttachmentList({ files, token, height = 72 }: { files: Attachmen
           {isImage(f.content_type) ? (
             <Image source={{ uri: attachmentUrl(f.id), headers }} style={{ width: height, height, borderRadius: 6, backgroundColor: C.bg }} resizeMode="cover" />
           ) : (
-            <View style={{ width: height, height, borderRadius: 6, backgroundColor: '#ffebe9', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: height, height, borderRadius: 6, backgroundColor: C.dangerSubtle, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: C.red, fontWeight: '800' }}>{f.content_type === 'application/pdf' ? 'PDF' : 'ファイル'}</Text>
             </View>
           )}

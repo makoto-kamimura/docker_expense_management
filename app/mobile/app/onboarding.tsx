@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { apiFetch } from '@/api';
 import { Button, C, s } from '@/components/ui';
+import { useTheme } from '@/theme';
 
 const STEPS = [
   { title: '1. 稟議を作る', body: '買いたいもの・金額・理由・商品URLをまとめて、グループに伝えます。' },
@@ -12,6 +13,7 @@ const STEPS = [
 
 /** 初回ログイン時の 3 ステップ説明 (readme.md 6.2節) */
 export default function OnboardingScreen() {
+  useTheme();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const st = STEPS[step];

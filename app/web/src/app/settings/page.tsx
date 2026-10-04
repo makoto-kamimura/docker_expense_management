@@ -2,10 +2,11 @@ import { apiFetch } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { regenerateInviteCodeAction, updateFamilyNameAction } from '@/lib/actions';
 import Avatar from '@/components/Avatar';
-import type { ChoresResp, Label, Member } from '@/lib/types';
+import type { ChoresResp, Label, Member, RequestType } from '@/lib/types';
 import LabelSettings from './label-settings';
 import MemberRoles from './member-roles';
 import ChoreSettings from './chore-settings';
+import RequestTypeSettings from './request-type-settings';
 
 /** Family Settings (readme.md 第7章) */
 export default async function SettingsPage() {
@@ -13,6 +14,7 @@ export default async function SettingsPage() {
   const members = await apiFetch<Member[]>('/family/members');
   const chores = user.is_admin ? (await apiFetch<ChoresResp>('/chores')).chores : [];
   const labels = user.is_admin ? await apiFetch<Label[]>('/labels') : [];
+  const types = user.is_admin ? await apiFetch<RequestType[]>('/request-types') : [];
 
   return (
     <div style={{ maxWidth: 860 }}>
@@ -73,6 +75,16 @@ export default async function SettingsPage() {
           </div>
         ))}
       </div>
+
+      {user.is_admin && (
+        <div className="box" id="types">
+          <div className="box-head">
+            <h2>稟議の種類</h2>
+            <span className="muted small">型 (購入型 / 外出・イベント型 / 提案型) で入力項目が決まります。稟議がある種類は非表示にできます</span>
+          </div>
+          <RequestTypeSettings types={types} />
+        </div>
+      )}
 
       {user.is_admin && (
         <div className="box" id="labels">

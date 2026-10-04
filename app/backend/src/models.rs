@@ -130,6 +130,8 @@ pub struct PurchaseRequest {
     pub family_id: Uuid,
     pub requester_id: Uuid,
     pub kind: RequestKind,
+    /// 種類 (request_types)。kind はその種類の型
+    pub type_id: Option<Uuid>,
     /// 分岐元の稟議
     pub parent_id: Option<Uuid>,
     pub title: String,
@@ -190,6 +192,33 @@ pub struct LabelInput {
     pub name: String,
     pub color: String,
     pub description: Option<String>,
+}
+
+/// 稟議の種類 (グループごと)。base の型で入力項目や完了の表現が決まる
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct RequestType {
+    pub id: Uuid,
+    pub name: String,
+    pub icon: String,
+    pub base: RequestKind,
+    pub hidden: bool,
+    /// この種類の稟議の数 (0 のときだけ削除できる)
+    pub request_count: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestTypeInput {
+    pub name: String,
+    pub icon: Option<String>,
+    /// 作成時のみ使う (作ったあとは変えられない)
+    pub base: Option<RequestKind>,
+    #[serde(default)]
+    pub hidden: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RequestTypeOrder {
+    pub ids: Vec<Uuid>,
 }
 
 /// 稟議に付けるラベル (この集合に置き換える)
@@ -294,6 +323,7 @@ pub struct RequestRef {
     pub id: Uuid,
     pub title: String,
     pub kind: RequestKind,
+    pub type_id: Option<Uuid>,
     pub status: RequestStatus,
     pub requester_name: String,
 }
@@ -571,6 +601,10 @@ pub struct AlternativeInput {
 
 #[derive(Debug, Deserialize)]
 pub struct RequestInput {
+    /// 種類。省略時は kind の型の最初の種類 (種類の機能より前のクライアント向け)
+    #[serde(default)]
+    pub type_id: Option<Uuid>,
+    /// 型。type_id を指定したときは、その種類の型で上書きする
     #[serde(default)]
     pub kind: RequestKind,
     /// 分岐元 (作成時のみ有効。更新では無視する)
@@ -622,8 +656,11 @@ pub struct PurchaseInput {
 pub struct ListQuery {
     /// all / waiting / to_review / mine / approved / purchased / closed
     pub filter: Option<String>,
-    /// 種類で絞り込む (省略時はすべて)
+    /// 型で絞り込む (省略時はすべて)
     pub kind: Option<RequestKind>,
+    /// 種類で絞り込む
+    #[serde(rename = "type")]
+    pub type_id: Option<Uuid>,
     /// ラベルで絞り込む
     pub label: Option<Uuid>,
 }
