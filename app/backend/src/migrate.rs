@@ -290,7 +290,7 @@ BEGIN
         SELECT id INTO t FROM tenants ORDER BY created_at LIMIT 1;
         IF t IS NULL THEN
             INSERT INTO tenants (name, invite_code)
-            VALUES ('デモ家族', upper(encode(gen_random_bytes(5), 'hex')))
+            VALUES ('デモグループ', upper(encode(gen_random_bytes(5), 'hex')))
             RETURNING id INTO t;
         END IF;
         UPDATE users SET tenant_id = t WHERE tenant_id IS NULL;

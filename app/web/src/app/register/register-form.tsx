@@ -22,11 +22,11 @@ export default function RegisterForm({ action }: { action: ActionFn }) {
     >
       {error && <div className="error">{error}</div>}
       <div className="row">
-        <label>家族</label>
+        <label>グループ</label>
         <div className="chips">
           <label className={`chip${mode === 'create' ? ' chip-on' : ''}`}>
             <input type="radio" name="mode" value="create" checked={mode === 'create'} onChange={() => setMode('create')} />
-            家族を新しく作る
+            グループを新しく作る
           </label>
           <label className={`chip${mode === 'join' ? ' chip-on' : ''}`}>
             <input type="radio" name="mode" value="join" checked={mode === 'join'} onChange={() => setMode('join')} />
@@ -36,17 +36,17 @@ export default function RegisterForm({ action }: { action: ActionFn }) {
       </div>
       {mode === 'create' ? (
         <div className="row">
-          <label htmlFor="family_name">家族の名前<span className="hint">あなたが管理者になります</span></label>
+          <label htmlFor="family_name">グループの名前<span className="hint">あなたが管理者になります</span></label>
           <input id="family_name" name="family_name" required placeholder="例: 山田家" />
         </div>
       ) : (
         <div className="row">
-          <label htmlFor="invite_code">招待コード<span className="hint">家族の管理者から受け取ったコード</span></label>
+          <label htmlFor="invite_code">招待コード<span className="hint">グループの管理者から受け取ったコード</span></label>
           <input id="invite_code" name="invite_code" required autoCapitalize="characters" />
         </div>
       )}
       <div className="row">
-        <label htmlFor="name">表示名<span className="hint">家族に表示される名前 (例: パパ)</span></label>
+        <label htmlFor="name">表示名<span className="hint">グループに表示される名前 (例: パパ)</span></label>
         <input id="name" name="name" required />
       </div>
       <div className="row">

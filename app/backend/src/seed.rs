@@ -20,11 +20,11 @@ struct Seed<'a> {
 /// デモアカウントの行を、英語の初期値と完全一致する場合だけ更新するので、
 /// 利用者が作成・編集したデータには影響せず、何度流しても同じ結果になる。
 const LOCALIZE_DEMO_SQL: &str = r#"
-UPDATE families SET name = 'デモ家族'
- WHERE name = 'Demo Family'
+UPDATE families SET name = 'デモグループ'
+ WHERE name IN ('Demo Family', 'デモ家族')
    AND id IN (SELECT m.family_id FROM family_members m JOIN users u ON u.id = m.user_id WHERE u.email = 'dad@example.com');
-UPDATE families SET name = '別の家族'
- WHERE name = 'Other Family'
+UPDATE families SET name = '別のグループ'
+ WHERE name IN ('Other Family', '別の家族')
    AND id IN (SELECT m.family_id FROM family_members m JOIN users u ON u.id = m.user_id WHERE u.email = 'other@example.com');
 
 UPDATE users SET name = v.ja FROM (VALUES
@@ -41,9 +41,9 @@ UPDATE purchase_requests r SET
     seller       = CASE WHEN r.seller = v.seller_en THEN v.seller ELSE r.seller END,
     product_name = CASE WHEN r.product_name = v.product_en THEN v.product ELSE r.product_name END
 FROM (VALUES
-    ('New Camera for Family Trips', '家族旅行用の新しいカメラ',
+    ('New Camera for Family Trips', 'グループ旅行用の新しいカメラ',
      E'I want to use this camera for family trips and outdoor activities.\nThe current camera is over 8 years old and the battery no longer holds a charge.',
-     E'家族旅行やアウトドアで使うカメラが欲しいです。\n今のカメラは8年以上前のもので、バッテリーがすぐ切れてしまいます。',
+     E'グループ旅行やアウトドアで使うカメラが欲しいです。\n今のカメラは8年以上前のもので、バッテリーがすぐ切れてしまいます。',
      'Amazon', 'Amazon', 'Sony α6400 Kit', 'ソニー α6400 レンズキット'),
     ('Coffee Machine', 'コーヒーマシン',
      'We buy coffee outside almost every day. A machine at home would pay for itself in about a year.',
@@ -72,6 +72,20 @@ UPDATE alternative_products a SET name = v.ja FROM (VALUES
 ) AS v(en, ja)
  WHERE a.name = v.en
    AND a.request_id IN (SELECT r.id FROM purchase_requests r JOIN users u ON u.id = r.requester_id WHERE u.email = 'dad@example.com');
+
+-- 「家族」を「グループ」に言い換えた初期値。以前の文のままの行だけを新しい文にする
+UPDATE purchase_requests SET
+    title  = CASE WHEN title = '家族旅行用の新しいカメラ' THEN 'グループ旅行用の新しいカメラ' ELSE title END,
+    reason = CASE
+        WHEN reason = E'家族旅行やアウトドアで使うカメラが欲しいです。\n今のカメラは8年以上前のもので、バッテリーがすぐ切れてしまいます。'
+            THEN E'グループ旅行やアウトドアで使うカメラが欲しいです。\n今のカメラは8年以上前のもので、バッテリーがすぐ切れてしまいます。'
+        WHEN reason = '家族でゆっくり出かける機会が最近なかったので、紅葉の時期に日光へ行きたいです。'
+            THEN 'みんなでゆっくり出かける機会が最近なかったので、紅葉の時期に日光へ行きたいです。'
+        ELSE reason END
+ WHERE requester_id = (SELECT id FROM users WHERE email = 'dad@example.com')
+   AND (title = '家族旅行用の新しいカメラ' OR reason LIKE '家族%');
+UPDATE labels SET description = 'グループで話し合いたい' WHERE description = '家族会議で話したい';
+UPDATE chores SET description = 'みんなのごはんを1食でも作ったら' WHERE description = '家族のごはんを1食でも作ったら';
 "#;
 
 pub async fn seed(state: &AppState) -> anyhow::Result<()> {
@@ -80,7 +94,7 @@ pub async fn seed(state: &AppState) -> anyhow::Result<()> {
         Some(id) => id,
         None => match family_of(state, "admin@example.com").await? {
             Some(id) => id,
-            None => get_or_create_family(state, "デモ家族").await?,
+            None => get_or_create_family(state, "デモグループ").await?,
         },
     };
     seed_members(
@@ -103,7 +117,7 @@ pub async fn seed(state: &AppState) -> anyhow::Result<()> {
     // 既存環境では other@example.com の家族 (旧名 "Other Family") をそのまま使う
     let other = match family_of(state, "other@example.com").await? {
         Some(id) => id,
-        None => get_or_create_family(state, "別の家族").await?,
+        None => get_or_create_family(state, "別のグループ").await?,
     };
     seed_members(
         state,
@@ -279,8 +293,8 @@ async fn seed_requests(state: &AppState, family_id: Uuid) -> anyhow::Result<()> 
     };
 
     let (camera,) = insert(
-        "家族旅行用の新しいカメラ",
-        "家族旅行やアウトドアで使うカメラが欲しいです。\n今のカメラは8年以上前のもので、バッテリーがすぐ切れてしまいます。",
+        "グループ旅行用の新しいカメラ",
+        "グループ旅行やアウトドアで使うカメラが欲しいです。\n今のカメラは8年以上前のもので、バッテリーがすぐ切れてしまいます。",
         128_000, "Amazon", "ソニー α6400 レンズキット", "https://www.amazon.co.jp/", "electronics", "under_review",
     )
     .fetch_one(&mut *tx)
@@ -413,7 +427,7 @@ async fn seed_outings(state: &AppState, family_id: Uuid) -> anyhow::Result<()> {
              category, planned_date, status, submitted_at, approved_at, merged_at, merged_by,
              purchased_at, purchase_date, actual_price, created_at)
          VALUES ($1, $2, 'outing', '紅葉を見に日光へ日帰り旅行',
-                 '家族でゆっくり出かける機会が最近なかったので、紅葉の時期に日光へ行きたいです。',
+                 'みんなでゆっくり出かける機会が最近なかったので、紅葉の時期に日光へ行きたいです。',
                  30000, '東武鉄道 (特急券)', '日光 (いろは坂・華厳の滝)', 'https://www.nikko-kankou.org/',
                  'travel', CURRENT_DATE - 14, 'purchased', now() - interval '30 days', now() - interval '28 days',
                  now() - interval '28 days', $3, now() - interval '14 days', CURRENT_DATE - 14, 27600,

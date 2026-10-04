@@ -35,7 +35,7 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
   // ---- Draft ----
   if (r.status === 'draft') {
     return (
-      <Panel icon="pr-draft" color="gray" title="この稟議は下書きです" sub="家族にはまだ見えていません。内容を確認してレビューを依頼しましょう。">
+      <Panel icon="pr-draft" color="gray" title="この稟議は下書きです" sub="グループにはまだ見えていません。内容を確認してレビューを依頼しましょう。">
         {errorBox}
         {p.can_edit && !p.can_submit && <p className="muted">レビューを依頼するには、編集画面でレビュアーを1人以上選んでください。</p>}
         <div className="actions">
@@ -93,7 +93,7 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
       );
     }
     return (
-      <Panel icon="dot" color="yellow" title={`${reviewerNames} のレビュー待ちです`} sub="家族が確認しています。質問にはコメントで答えましょう。">
+      <Panel icon="dot" color="yellow" title={`${reviewerNames} のレビュー待ちです`} sub="グループが確認しています。質問にはコメントで答えましょう。">
         {errorBox}
         {p.can_close && <WithdrawButton pending={pending} onWithdraw={() => run('close')} />}
       </Panel>
@@ -121,11 +121,11 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
     const approvers = reviewers.filter((x) => x.decision === 'approved').map((x) => x.name).join('、');
     return (
       <>
-        <Panel icon="check" color="green" title={`${approvers || '家族'} が承認しました`} sub="レビューが完了しました。" />
+        <Panel icon="check" color="green" title={`${approvers || 'メンバー'} が承認しました`} sub="レビューが完了しました。" />
         <Panel icon="merge" color="purple" title="マージできます" sub={t.mergeSub}>
           {errorBox}
           <p className="muted">
-            マージすると、{t.thing}は家族に承認されたものとして扱われます (稟議成立)。
+            マージすると、{t.thing}はグループに承認されたものとして扱われます (稟議成立)。
           </p>
           <div className="actions">
             {p.can_merge ? (
@@ -138,7 +138,7 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
                 disabled={pending}
                 onConfirm={() => run('merge')}
               >
-                <p>家族が{t.thing}に合意したことを確定します。</p>
+                <p>グループが{t.thing}に合意したことを確定します。</p>
                 <p style={{ fontSize: 20, fontWeight: 600 }}>{r.title} — {price}</p>
               </ConfirmButton>
             ) : (

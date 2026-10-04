@@ -16,14 +16,14 @@ export default async function SettingsPage() {
 
   return (
     <div style={{ maxWidth: 860 }}>
-      <h1>家族の設定</h1>
+      <h1>グループの設定</h1>
 
       <div className="box">
-        <div className="box-head"><h2>家族の名前</h2></div>
+        <div className="box-head"><h2>グループの名前</h2></div>
         <div className="box-body">
           {user.is_admin ? (
             <form action={updateFamilyNameAction} className="actions">
-              <input name="name" defaultValue={user.family.name} required aria-label="家族の名前" style={{ flex: 1, minWidth: 200 }} />
+              <input name="name" defaultValue={user.family.name} required aria-label="グループの名前" style={{ flex: 1, minWidth: 200 }} />
               <button type="submit">保存</button>
             </form>
           ) : (
@@ -34,7 +34,7 @@ export default async function SettingsPage() {
 
       {user.is_admin && (
         <div className="box">
-          <div className="box-head"><h2>家族を招待</h2></div>
+          <div className="box-head"><h2>メンバーを招待</h2></div>
           <div className="box-body">
             <div className="actions">
               <code className="invite">{user.family.invite_code}</code>
@@ -43,7 +43,7 @@ export default async function SettingsPage() {
               </form>
             </div>
             <p className="muted" style={{ marginTop: 12, marginBottom: 0 }}>
-              このコードを家族に伝えてください。新規登録画面で<strong>招待コードで参加</strong>を選んで入力します。
+              このコードを招待したい人に伝えてください。新規登録画面で<strong>招待コードで参加</strong>を選んで入力します。
               <br />
               再発行すると、古いコードは使えなくなります。
             </p>
@@ -54,7 +54,7 @@ export default async function SettingsPage() {
       <div className="box">
         <div className="box-head">
           <h2>メンバー</h2>
-          <span className="muted small">申請者 = 稟議を作れる / レビュアー = レビューできる / 管理者 = 家族の設定を変更できる</span>
+          <span className="muted small">申請者 = 稟議を作れる / レビュアー = レビューできる / 管理者 = グループの設定を変更できる</span>
         </div>
         {members.map((m) => (
           <div key={m.id} className="box-row" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>

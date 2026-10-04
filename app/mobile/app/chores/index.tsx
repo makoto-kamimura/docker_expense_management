@@ -269,7 +269,7 @@ export default function ChoresScreen() {
         <ChoreBadges c={d.me} />
       </Card>
 
-      <Card title="家族の実績">
+      <Card title="グループの実績">
         {d.members.map((m) => (
           <View key={m.user.id} style={{ paddingVertical: 10, borderBottomColor: C.borderMuted, borderBottomWidth: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>

@@ -9,7 +9,7 @@ export default function LoginPage() {
           <h1>RingiWoMerge にログイン</h1>
           <LoginForm action={loginAction} />
           <p className="muted" style={{ marginTop: 16, marginBottom: 0 }}>
-            はじめての方は<a href="/register">新規登録</a>から、家族を作成するか招待コードで参加してください。
+            はじめての方は<a href="/register">新規登録</a>から、グループを作成するか招待コードで参加してください。
           </p>
         </div>
       </div>

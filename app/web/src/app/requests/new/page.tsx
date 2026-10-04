@@ -8,7 +8,7 @@ import { KINDS, type Label, type Member, type RequestKind } from '@/lib/types';
 export default async function NewRequestPage({ searchParams }: { searchParams: { kind?: string; parent?: string } }) {
   const user = await requireUser();
   if (!user.can_request) {
-    return <div className="notice">家族の管理者から稟議を作成する権限が付与されていません。</div>;
+    return <div className="notice">グループの管理者から稟議を作成する権限が付与されていません。</div>;
   }
   const [members, labels, parent] = await Promise.all([
     apiFetch<Member[]>('/family/members'),
