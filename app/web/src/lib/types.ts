@@ -481,6 +481,22 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
 };
 
 /** 種類を考慮した状態ラベル (お出かけの完了は「行ってきた」) */
+/**
+ * レビューを依頼する (申請する) ときに足りない項目の名前。API の申請時のチェックと同じ条件。
+ * 空なら申請できる。ボタンを無効にせず、押したときにこれを伝える
+ */
+export function submitMissing(
+  t: KindText,
+  v: { reviewers: number; reason: string; seller: string; product: string },
+): string[] {
+  const missing: string[] = [];
+  if (t.sellerRequired && !v.seller.trim()) missing.push(t.seller);
+  if (t.productRequired && !v.product.trim()) missing.push(t.product);
+  if (!v.reason.trim()) missing.push(t.reason);
+  if (v.reviewers === 0) missing.push('レビュアー (1人以上)');
+  return missing;
+}
+
 export function statusLabel(kind: RequestKind, status: RequestStatus): string {
   return status === 'purchased' ? KIND_TEXT[kind].done : STATUS_LABEL[status];
 }

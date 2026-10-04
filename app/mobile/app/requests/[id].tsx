@@ -238,9 +238,13 @@ export default function RequestDetailScreen() {
             {p.can_edit && <Button title="編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
             {p.can_submit ? (
               <Button title="レビューを依頼する" variant="primary" busy={busy} onPress={() => run('submit')} />
-            ) : (
-              <Text style={s.muted}>レビューを依頼するには、レビュアーを1人以上選んでください。</Text>
-            )}
+            ) : p.can_edit ? (
+              // レビュアーがまだいないときは、ボタンの代わりに編集画面へ案内する
+              <>
+                <Text style={s.muted}>レビューを依頼するには、レビュアーを1人以上選んでください。</Text>
+                <Button title="レビュアーを選んで依頼する" variant="primary" onPress={() => router.push(`/requests/edit/${r.id}`)} />
+              </>
+            ) : null}
           </>
         )}
 

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { apiFetch } from '@/api';
 import {
   KIND_TEXT,
+  submitMissing,
   type Label,
   type Member,
   type RequestDetail,
@@ -119,7 +120,16 @@ export default function RequestForm({
   const setAlt = (i: number, patch: Partial<AltDraft>) =>
     setAlts((prev) => prev.map((a, j) => (j === i ? { ...a, ...patch } : a)));
 
+  const scroll = useRef<ScrollView>(null);
+  // 申請に足りない項目 (ボタンは無効にせず、押したときと、ボタンの下に表示する)
+  const missing = submitMissing(t, { reviewers: reviewers.length, reason, seller, product: productName });
+
   const save = async (submit: boolean) => {
+    if (submit && missing.length > 0) {
+      setError(`レビューを依頼するには、次を入力してください: ${missing.join('、')}`);
+      scroll.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
     setBusy(submit ? 'submit' : 'save');
     setError(null);
     try {
@@ -152,10 +162,9 @@ export default function RequestForm({
     }
   };
 
-  const canSubmit = !!title.trim() && reviewers.length > 0;
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={{ padding: 12, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={scroll} style={s.screen} contentContainerStyle={{ padding: 12, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       {error && <Text style={s.error}>{error}</Text>}
 
       <Card title="稟議の種類">
@@ -270,7 +279,8 @@ export default function RequestForm({
       </Card>
 
       <View style={{ gap: 8 }}>
-        <Button title="レビューを依頼する" variant="primary" onPress={() => save(true)} disabled={!canSubmit || !!busy} busy={busy === 'submit'} />
+        <Button title="レビューを依頼する" variant="primary" onPress={() => save(true)} disabled={!title.trim() || !!busy} busy={busy === 'submit'} />
+        {missing.length > 0 && <Text style={s.muted}>レビューを依頼するには: {missing.join('、')} を入力してください</Text>}
         <Button title="下書き保存" onPress={() => save(false)} disabled={!title.trim() || !!busy} busy={busy === 'save'} />
       </View>
     </ScrollView>
