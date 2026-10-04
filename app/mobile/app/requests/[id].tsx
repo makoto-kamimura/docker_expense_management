@@ -186,6 +186,11 @@ export default function RequestDetailScreen() {
         )}
       </Card>
 
+      {/* 内容をコピーして新しい下書きを作る (どの状態の稟議からでもできる) */}
+      {me.can_request && (
+        <Button title="複製して下書きを作る" onPress={() => router.push(`/requests/new?copy=${r.id}`)} style={{ marginBottom: 12 }} />
+      )}
+
       <Card
         title="申請者の家事コミット"
         right={<Text style={s.link} onPress={() => router.push('/chores')}>グループの実績</Text>}

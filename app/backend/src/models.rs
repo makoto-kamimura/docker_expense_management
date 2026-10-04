@@ -175,6 +175,26 @@ pub struct RequestListItem {
     /// 商品URL のプレビュー画像 (GET /link-previews/:id/image)
     pub preview_id: Option<Uuid>,
     pub labels: sqlx::types::Json<Vec<Label>>,
+    /// 分岐元 (見えないときは None)
+    pub parent: sqlx::types::Json<Option<LinkedRequest>>,
+    /// 分岐先 (作成順。一覧が重くならないよう LINKED_CHILDREN_LIMIT 件まで)
+    pub children: sqlx::types::Json<Vec<LinkedRequest>>,
+    /// 見える分岐先の数 (children より多ければ残りは詳細画面で見る)
+    pub children_count: i64,
+}
+
+/// 一覧で、行に紐づいた稟議 (分岐元・分岐先) として出す最小限の情報
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LinkedRequest {
+    pub id: Uuid,
+    pub title: String,
+    pub kind: RequestKind,
+    pub type_id: Option<Uuid>,
+    pub status: RequestStatus,
+    pub requester_name: String,
+    pub price: i64,
+    pub actual_price: Option<i64>,
+    pub currency: String,
 }
 
 /// 家族ごとのラベル (GitHub の Labels と同じく、稟議に複数付けられる)

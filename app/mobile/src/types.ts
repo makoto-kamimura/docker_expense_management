@@ -108,6 +108,25 @@ export interface RequestListItem extends PurchaseRequest {
   /** 商品URL のプレビュー画像 ID */
   preview_id: string | null;
   labels: Label[];
+  /** 分岐元 (見えないときは null) */
+  parent: LinkedRequest | null;
+  /** 分岐先 (作成順。最大20件) */
+  children: LinkedRequest[];
+  /** 見える分岐先の数 */
+  children_count: number;
+}
+
+/** 一覧の行に紐づいた稟議 (分岐元・分岐先) */
+export interface LinkedRequest {
+  id: string;
+  title: string;
+  kind: RequestKind;
+  type_id: string | null;
+  status: RequestStatus;
+  requester_name: string;
+  price: number;
+  actual_price: number | null;
+  currency: string;
 }
 
 /** 家族ごとのラベル (GitHub の Labels と同じく、稟議に複数付けられる) */

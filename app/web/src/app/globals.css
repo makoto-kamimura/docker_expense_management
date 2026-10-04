@@ -643,3 +643,15 @@ a.label-chip:hover { text-decoration: none; filter: brightness(0.95); }
 /* 表示 (端末に合わせる / ライト / ダーク) の切り替え */
 .theme-switch { width: auto; min-height: 28px; height: 28px; padding: 0 8px; font-size: 12px; }
 @media (max-width: 600px) { .who .muted { display: none; } }
+/* 一覧: 紐づいた稟議 (分岐元・分岐先) の折りたたみ */
+.req-links { margin-top: 6px; font-size: 12px; }
+.req-links > summary { cursor: pointer; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; list-style: none; }
+.req-links > summary::-webkit-details-marker { display: none; }
+.req-links > summary::before { content: "▸"; font-size: 10px; }
+.req-links[open] > summary::before { content: "▾"; }
+.req-links > summary:hover { color: var(--accent); }
+.req-links[open] { padding-bottom: 4px; }
+.req-links-head { margin: 6px 0 2px 2px; color: var(--muted); font-weight: 600; }
+.req-link { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; padding: 4px 0 4px 10px; border-left: 2px solid var(--border); margin-left: 4px; }
+.req-link a { color: var(--fg); font-weight: 600; }
+

@@ -44,6 +44,7 @@ export default function RequestForm({
   initial,
   initialKind = 'purchase',
   initialTypeId,
+  copy,
   parentId,
   members,
   selfId,
@@ -55,6 +56,8 @@ export default function RequestForm({
   initialKind?: RequestKind;
   /** 新規作成時の種類 */
   initialTypeId?: string;
+  /** true なら initial は複製元 (保存すると新しい稟議になる。非表示の種類は選べない) */
+  copy?: boolean;
   /** 分岐元の稟議 (新規作成時のみ) */
   parentId?: string;
   members: Member[];
@@ -70,9 +73,14 @@ export default function RequestForm({
   useEffect(() => {
     apiFetch<RequestType[]>('/request-types')
       .then((all) => {
-        const list = all.filter((x) => !x.hidden || x.id === r?.type_id);
+        // 非表示の種類は、編集中の稟議に付いているときだけ選べる (複製では選べない)
+        const list = all.filter((x) => !x.hidden || (!copy && x.id === r?.type_id));
         setTypes(list);
-        setTypeId((cur) => cur ?? (list.find((x) => x.id === initialTypeId) ?? list.find((x) => x.base === initialKind) ?? list[0])?.id ?? null);
+        setTypeId((cur) => {
+          if (cur && list.some((x) => x.id === cur)) return cur;
+          const base = r?.kind ?? initialKind;
+          return (list.find((x) => x.id === initialTypeId) ?? list.find((x) => x.base === base) ?? list[0])?.id ?? null;
+        });
       })
       .catch(() => setTypes([]));
   }, []);

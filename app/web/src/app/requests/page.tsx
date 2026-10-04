@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { money, timeAgo } from '@/lib/format';
-import { FILTERS, STATUS_GROUP, statusLabel, typeOf, type Label, type RequestListItem, type RequestType } from '@/lib/types';
+import { FILTERS, STATUS_GROUP, statusLabel, typeOf, type Label, type LinkedRequest, type RequestListItem, type RequestType } from '@/lib/types';
 import LabelChip from '@/components/LabelChip';
 import Octicon, { statusIcon } from '@/components/Octicon';
 import { Thumb } from '@/components/LinkCard';
@@ -102,10 +102,8 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
                 <div className="req-meta">
                   #{shortId(r.id)} · {r.requester_name} が{timeAgo(r.created_at)}に作成 · {statusLabel(r.kind, r.status)}
                   {r.reviewer_names.length > 0 && <> · レビュアー: {r.reviewer_names.join('、')}</>}
-                  {r.parent_id && (
-                    <> · <Link href={`/requests/${r.parent_id}`} className="muted"><Octicon name="branch" size={12} /> #{shortId(r.parent_id)} から分岐</Link></>
-                  )}
                 </div>
+                <LinkedRequests r={r} types={types} />
               </div>
               <div className="req-side">
                 {r.preview_id && <Thumb id={r.preview_id} size={40} />}
@@ -118,6 +116,43 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+/** 紐づいた稟議 (分岐元・分岐先) の折りたたみ。紐づいた稟議がない行には出さない */
+function LinkedRequests({ r, types }: { r: RequestListItem; types: RequestType[] }) {
+  const total = (r.parent ? 1 : 0) + r.children_count;
+  if (total === 0) return null;
+  const rest = r.children_count - r.children.length;
+  return (
+    <details className="req-links">
+      <summary><Octicon name="branch" size={12} /> 紐づいた稟議 {total}件</summary>
+      {r.parent && (
+        <>
+          <div className="req-links-head">分岐元</div>
+          <LinkedRow x={r.parent} types={types} />
+        </>
+      )}
+      {r.children.length > 0 && (
+        <>
+          <div className="req-links-head">分岐先</div>
+          {r.children.map((c) => <LinkedRow key={c.id} x={c} types={types} />)}
+          {rest > 0 && <div className="muted"><Link href={`/requests/${r.id}`}>ほか {rest}件は詳細画面で</Link></div>}
+        </>
+      )}
+    </details>
+  );
+}
+
+function LinkedRow({ x, types }: { x: LinkedRequest; types: RequestType[] }) {
+  return (
+    <div className="req-link">
+      <span className={`icon-${STATUS_GROUP[x.status]}`} title={statusLabel(x.kind, x.status)}>
+        <Octicon name={statusIcon(x.status)} size={12} />
+      </span>
+      <Link href={`/requests/${x.id}`}>{typeOf(types, x.type_id, x.kind).icon} {x.title}</Link>
+      <span className="muted">#{shortId(x.id)} · {x.requester_name} · {statusLabel(x.kind, x.status)} · {money(x.actual_price ?? x.price, x.currency)}</span>
     </div>
   );
 }
