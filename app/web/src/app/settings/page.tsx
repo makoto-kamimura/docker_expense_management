@@ -7,6 +7,7 @@ import LabelSettings from './label-settings';
 import MemberRoles from './member-roles';
 import ChoreSettings from './chore-settings';
 import RequestTypeSettings from './request-type-settings';
+import MyName from './my-name';
 
 /** Family Settings (readme.md 第7章) */
 export default async function SettingsPage() {
@@ -19,6 +20,16 @@ export default async function SettingsPage() {
   return (
     <div style={{ maxWidth: 860 }}>
       <h1>グループの設定</h1>
+
+      <div className="box">
+        <div className="box-head">
+          <h2>あなたの表示名</h2>
+          <span className="muted small">稟議・レビュアー・コメントなどに表示される名前です</span>
+        </div>
+        <div className="box-body">
+          <MyName name={user.name} />
+        </div>
+      </div>
 
       <div className="box">
         <div className="box-head"><h2>グループの名前</h2></div>

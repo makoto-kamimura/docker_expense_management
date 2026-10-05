@@ -602,6 +602,11 @@ pub struct MeResp {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct MeUpdate {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct FamilyUpdate {
     pub name: String,
 }

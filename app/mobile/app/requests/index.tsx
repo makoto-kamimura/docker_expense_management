@@ -63,8 +63,13 @@ export default function RequestsScreen() {
       <View style={{ padding: 12, gap: 8 }}>
         {me && (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={s.muted}>{me.family.name} · {me.name}</Text>
-            <Text style={s.link} onPress={logout}>ログアウト</Text>
+            <Text style={s.muted}>
+              {me.family.name} · <Text style={s.link} onPress={() => router.push('/account')}>{me.name}</Text>
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Text style={s.link} onPress={() => router.push('/account')}>名前を変更</Text>
+              <Text style={s.link} onPress={logout}>ログアウト</Text>
+            </View>
           </View>
         )}
         <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
