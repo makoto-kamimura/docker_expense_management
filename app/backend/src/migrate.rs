@@ -1,7 +1,7 @@
 use sqlx::{Executor, PgPool};
 use uuid::Uuid;
 
-use crate::handlers::{chores, labels};
+use crate::handlers::{chores, labels, request_types};
 
 /// RingiWoMerge のスキーマ。すべて冪等に書き、API 起動のたびに流す。
 /// (platform/db/init.sql は拡張の有効化のみ。スキーマの正はこのファイル)
@@ -261,6 +261,39 @@ CREATE TABLE IF NOT EXISTS request_labels (
 );
 CREATE INDEX IF NOT EXISTS idx_request_labels_label ON request_labels(label_id);
 
+-- 稟議の種類 (グループごと)。base は入力項目や完了の表現を決める型 (購入型 / 外出・イベント型 / 提案型)。
+-- 初期の種類は families.types_seeded で一度だけ入れる
+ALTER TABLE families ADD COLUMN IF NOT EXISTS types_seeded BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS request_types (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    family_id  UUID NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    icon       TEXT NOT NULL DEFAULT '📝',
+    base       request_kind NOT NULL,
+    position   INT NOT NULL DEFAULT 0,
+    hidden     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_request_types_family_name ON request_types(family_id, lower(name));
+ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS type_id UUID REFERENCES request_types(id);
+CREATE INDEX IF NOT EXISTS idx_requests_type ON purchase_requests(type_id);
+
+-- 初期ラベルを、グループの種類を問わない名前に変えた。名前と説明が以前の初期値のままのラベルだけを置き換える
+-- (同じグループに新しい名前のラベルがすでにあれば変えない。何度流しても同じ結果になる)
+UPDATE labels l SET name = v.new_name, description = v.new_desc
+  FROM (VALUES
+      ('誕生日・記念日', 'プレゼントやお祝い', '記念日・イベント', 'お祝いや行事に関係するもの'),
+      ('セール待ち', '安くなったら買いたい', 'タイミング待ち', 'セールや時期を待って決めたい'),
+      ('家・生活', '', '生活・日用品', ''),
+      ('家電・ガジェット', '', '機器・ガジェット', ''),
+      ('趣味', '', '趣味・娯楽', ''),
+      ('旅行', '', '旅行・移動', ''),
+      ('教育', '', '学び・教育', ''),
+      ('外食', '', '飲食', '')
+  ) AS v(old_name, old_desc, new_name, new_desc)
+ WHERE l.name = v.old_name AND l.description = v.old_desc
+   AND NOT EXISTS (SELECT 1 FROM labels o WHERE o.family_id = l.family_id AND lower(o.name) = lower(v.new_name));
+
 CREATE OR REPLACE TRIGGER trg_families_updated_at BEFORE UPDATE ON families
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE OR REPLACE TRIGGER trg_users_updated_at BEFORE UPDATE ON users
@@ -457,5 +490,8 @@ pub async fn run(db: &PgPool) -> anyhow::Result<()> {
         let mut conn = db.acquire().await?;
         labels::create_defaults(&mut conn, id).await?;
     }
+
+    // 種類の機能より前からあるグループに初期の種類を入れ、既存の稟議に種類を付ける
+    request_types::ensure_all(db).await?;
     Ok(())
 }

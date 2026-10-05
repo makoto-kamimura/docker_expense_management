@@ -5,8 +5,10 @@ import { apiFetch } from '@/api';
 import RequestForm, { type RequestPayload } from '@/components/RequestForm';
 import { s } from '@/components/ui';
 import type { Member, RequestDetail } from '@/types';
+import { useTheme } from '@/theme';
 
 export default function EditRequestScreen() {
+  useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [detail, setDetail] = useState<RequestDetail | null>(null);
   const [members, setMembers] = useState<Member[]>([]);

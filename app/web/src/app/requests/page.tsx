@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { money, timeAgo } from '@/lib/format';
-import { FILTERS, KINDS, KIND_LABEL, KIND_TEXT, STATUS_GROUP, statusLabel, type Label, type RequestKind, type RequestListItem } from '@/lib/types';
+import { FILTERS, STATUS_GROUP, statusLabel, typeOf, type Label, type LinkedRequest, type RequestListItem, type RequestType } from '@/lib/types';
 import LabelChip from '@/components/LabelChip';
 import Octicon, { statusIcon } from '@/components/Octicon';
 import { Thumb } from '@/components/LinkCard';
@@ -21,24 +21,27 @@ const EMPTY_TEXT: Record<string, string> = {
 /** 申請番号 (ID の先頭 7 桁)。GitHub の #123 の代わり */
 const shortId = (id: string) => id.slice(0, 7);
 
-export default async function RequestsPage({ searchParams }: { searchParams: { filter?: string; kind?: string; label?: string } }) {
+export default async function RequestsPage({ searchParams }: { searchParams: { filter?: string; type?: string; label?: string } }) {
   const user = await requireUser();
   if (!user.onboarded) redirect('/onboarding');
 
   const filter = FILTERS.some((f) => f.key === searchParams.filter) ? searchParams.filter! : 'all';
-  const kind: RequestKind | null = KINDS.includes(searchParams.kind as RequestKind) ? (searchParams.kind as RequestKind) : null;
-  // ラベルでの絞り込みは、家族のラベルに実在する ID のときだけ使う
-  const labels = await apiFetch<Label[]>('/labels');
+  // 種類・ラベルでの絞り込みは、グループに実在する ID のときだけ使う
+  const [labels, types] = await Promise.all([apiFetch<Label[]>('/labels'), apiFetch<RequestType[]>('/request-types')]);
   const label = labels.find((l) => l.id === searchParams.label) ?? null;
+  const type = types.find((x) => x.id === searchParams.type) ?? null;
+  const kind = type?.id ?? null;
+  // 絞り込みのタブには表示中の種類と、選んでいる種類を出す
+  const typeTabs = types.filter((x) => !x.hidden || x.id === kind);
   const qs = new URLSearchParams({ filter });
-  if (kind) qs.set('kind', kind);
+  if (kind) qs.set('type', kind);
   if (label) qs.set('label', label.id);
   const items = await apiFetch<RequestListItem[]>(`/requests?${qs}`);
   // フィルター・種類・ラベルを組み合わせたリンク
-  const href = (f: string, k: RequestKind | null, l: string | null = label?.id ?? null) => {
+  const href = (f: string, k: string | null, l: string | null = label?.id ?? null) => {
     const q = new URLSearchParams();
     if (f !== 'all') q.set('filter', f);
-    if (k) q.set('kind', k);
+    if (k) q.set('type', k);
     if (l) q.set('label', l);
     return q.toString() ? `/requests?${q}` : '/requests';
   };
@@ -48,8 +51,8 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
       <div className="list-head">
         <h1>{filter === 'to_review' ? 'レビュー' : '稟議'}</h1>
         {user.can_request && (
-          // 種類 (買いたいもの / 行きたいところ / やりたいこと) はフォームで選ぶ
-          <Link className="btn btn-primary" href={kind ? `/requests/new?kind=${kind}` : '/requests/new'}>新しいプロジェクト</Link>
+          // 種類はフォームで選ぶ (絞り込み中の種類があれば初期値にする)
+          <Link className="btn btn-primary" href={kind ? `/requests/new?type=${kind}` : '/requests/new'}>新しいプロジェクト</Link>
         )}
       </div>
 
@@ -63,9 +66,9 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
             ))}
           </nav>
           <nav className="filters" aria-label="種類で絞り込み">
-            {([null, ...KINDS] as (RequestKind | null)[]).map((k) => (
-              <Link key={k ?? 'any'} href={href(filter, k)} className={k === kind ? 'on' : ''}>
-                {k ? KIND_LABEL[k] : 'すべての種類'}
+            {([null, ...typeTabs] as (RequestType | null)[]).map((x) => (
+              <Link key={x?.id ?? 'any'} href={href(filter, x?.id ?? null)} className={(x?.id ?? null) === kind ? 'on' : ''}>
+                {x ? `${x.icon} ${x.name}` : 'すべての種類'}
               </Link>
             ))}
             <span className="muted small">{items.length} 件</span>
@@ -94,15 +97,13 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
               </span>
               <div className="req-main">
                 <Link href={`/requests/${r.id}`} className="req-title">{r.title}</Link>
-                {r.kind !== 'purchase' && <span className="label label-outing">{KIND_TEXT[r.kind].icon} {KIND_LABEL[r.kind]}</span>}
+                <span className="label label-outing">{typeOf(types, r.type_id, r.kind).icon} {typeOf(types, r.type_id, r.kind).name}</span>
                 {r.labels.map((l) => <LabelChip key={l.id} label={l} href={href(filter, kind, l.id)} />)}
                 <div className="req-meta">
                   #{shortId(r.id)} · {r.requester_name} が{timeAgo(r.created_at)}に作成 · {statusLabel(r.kind, r.status)}
                   {r.reviewer_names.length > 0 && <> · レビュアー: {r.reviewer_names.join('、')}</>}
-                  {r.parent_id && (
-                    <> · <Link href={`/requests/${r.parent_id}`} className="muted"><Octicon name="branch" size={12} /> #{shortId(r.parent_id)} から分岐</Link></>
-                  )}
                 </div>
+                <LinkedRequests r={r} types={types} />
               </div>
               <div className="req-side">
                 {r.preview_id && <Thumb id={r.preview_id} size={40} />}
@@ -115,6 +116,43 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+/** 紐づいた稟議 (分岐元・分岐先) の折りたたみ。紐づいた稟議がない行には出さない */
+function LinkedRequests({ r, types }: { r: RequestListItem; types: RequestType[] }) {
+  const total = (r.parent ? 1 : 0) + r.children_count;
+  if (total === 0) return null;
+  const rest = r.children_count - r.children.length;
+  return (
+    <details className="req-links">
+      <summary><Octicon name="branch" size={12} /> 紐づいた稟議 {total}件</summary>
+      {r.parent && (
+        <>
+          <div className="req-links-head">分岐元</div>
+          <LinkedRow x={r.parent} types={types} />
+        </>
+      )}
+      {r.children.length > 0 && (
+        <>
+          <div className="req-links-head">分岐先</div>
+          {r.children.map((c) => <LinkedRow key={c.id} x={c} types={types} />)}
+          {rest > 0 && <div className="muted"><Link href={`/requests/${r.id}`}>ほか {rest}件は詳細画面で</Link></div>}
+        </>
+      )}
+    </details>
+  );
+}
+
+function LinkedRow({ x, types }: { x: LinkedRequest; types: RequestType[] }) {
+  return (
+    <div className="req-link">
+      <span className={`icon-${STATUS_GROUP[x.status]}`} title={statusLabel(x.kind, x.status)}>
+        <Octicon name={statusIcon(x.status)} size={12} />
+      </span>
+      <Link href={`/requests/${x.id}`}>{typeOf(types, x.type_id, x.kind).icon} {x.title}</Link>
+      <span className="muted">#{shortId(x.id)} · {x.requester_name} · {statusLabel(x.kind, x.status)} · {money(x.actual_price ?? x.price, x.currency)}</span>
     </div>
   );
 }

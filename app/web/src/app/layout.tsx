@@ -1,4 +1,5 @@
 import './globals.css';
+import { cookies } from 'next/headers';
 import type { Metadata } from 'next';
 import { getCurrentUser } from '@/lib/session';
 import { logoutAction } from '@/lib/actions';
@@ -6,6 +7,8 @@ import { apiFetch } from '@/lib/api';
 import { Suspense } from 'react';
 import Avatar from '@/components/Avatar';
 import NavTabs from '@/components/NavTabs';
+import ThemeSwitch from '@/components/ThemeSwitch';
+import { THEME_COOKIE, parseTheme } from '@/lib/theme';
 import Octicon from '@/components/Octicon';
 import type { RequestListItem } from '@/lib/types';
 
@@ -16,13 +19,15 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
+  // 表示の設定はサーバー側で html に付けて、読み込み時に色が切り替わって見えないようにする
+  const theme = parseTheme(cookies().get(THEME_COOKIE)?.value);
   // 自分がレビューすべき申請の件数 (Review タブのバッジ)
   const toReview = user
     ? (await apiFetch<RequestListItem[]>('/requests?filter=to_review').catch(() => [])).length
     : 0;
 
   return (
-    <html lang="ja">
+    <html lang="ja" data-theme={theme === 'system' ? undefined : theme}>
       <body>
         <header className="header">
           <div className="header-inner" style={user ? undefined : { paddingBottom: 16 }}>
@@ -40,6 +45,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <a href="/" style={{ color: 'inherit' }}><strong>RingiWoMerge</strong></a>
               </div>
               <div className="who">
+                <ThemeSwitch initial={theme} />
                 {user ? (
                   <>
                     <Avatar name={user.name} />

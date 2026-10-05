@@ -1,16 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { apiFetch } from '@/api';
 import {
-  KINDS,
   KIND_TEXT,
+  submitMissing,
   type Label,
   type Member,
   type RequestDetail,
   type RequestKind,
+  type RequestType,
 } from '@/types';
 import { LabelChip } from './Labels';
 import { Button, C, Card, s } from './ui';
+import Markdown from './Markdown';
 
 interface AltDraft {
   name: string;
@@ -21,6 +23,7 @@ interface AltDraft {
 
 /** API の RequestInput */
 export interface RequestPayload {
+  type_id: string | null;
   kind: RequestKind;
   parent_id: string | null;
   title: string;
@@ -42,6 +45,8 @@ const opt = (v: string) => v.trim() || null;
 export default function RequestForm({
   initial,
   initialKind = 'purchase',
+  initialTypeId,
+  copy,
   parentId,
   members,
   selfId,
@@ -49,8 +54,12 @@ export default function RequestForm({
   onSave,
 }: {
   initial?: RequestDetail;
-  /** 新規作成時の種類 */
+  /** 新規作成時の型 (種類の指定がないとき、この型の最初の種類にする) */
   initialKind?: RequestKind;
+  /** 新規作成時の種類 */
+  initialTypeId?: string;
+  /** true なら initial は複製元 (保存すると新しい稟議になる。非表示の種類は選べない) */
+  copy?: boolean;
   /** 分岐元の稟議 (新規作成時のみ) */
   parentId?: string;
   members: Member[];
@@ -60,7 +69,26 @@ export default function RequestForm({
   onSave: (payload: RequestPayload, submit: boolean) => Promise<void>;
 }) {
   const r = initial?.request;
-  const [kind, setKind] = useState<RequestKind>(r?.kind ?? initialKind);
+  // グループの種類 (表示中のものと、編集中の稟議に付いているもの) から選ぶ
+  const [types, setTypes] = useState<RequestType[]>([]);
+  const [typeId, setTypeId] = useState<string | null>(r?.type_id ?? null);
+  useEffect(() => {
+    apiFetch<RequestType[]>('/request-types')
+      .then((all) => {
+        // 非表示の種類は、編集中の稟議に付いているときだけ選べる (複製では選べない)
+        const list = all.filter((x) => !x.hidden || (!copy && x.id === r?.type_id));
+        setTypes(list);
+        setTypeId((cur) => {
+          if (cur && list.some((x) => x.id === cur)) return cur;
+          const base = r?.kind ?? initialKind;
+          return (list.find((x) => x.id === initialTypeId) ?? list.find((x) => x.base === base) ?? list[0])?.id ?? null;
+        });
+      })
+      .catch(() => setTypes([]));
+  }, []);
+  const type = types.find((x) => x.id === typeId);
+  // 入力項目や完了の表現は、種類の型で決まる
+  const kind: RequestKind = type?.base ?? r?.kind ?? initialKind;
   const [endDate, setEndDate] = useState(r?.end_date ?? '');
   const t = KIND_TEXT[kind];
   const [title, setTitle] = useState(r?.title ?? '');
@@ -76,6 +104,8 @@ export default function RequestForm({
   }, []);
   const [plannedDate, setPlannedDate] = useState(r?.planned_date ?? '');
   const [reason, setReason] = useState(r?.reason ?? '');
+  // 理由は Markdown で書ける。プレビューに切り替えて整った表示を確かめられる
+  const [reasonPreview, setReasonPreview] = useState(false);
   const [notes, setNotes] = useState(r?.notes ?? '');
   const [reviewers, setReviewers] = useState<string[]>(initial?.reviewers.map((x) => x.id) ?? []);
   const [alts, setAlts] = useState<AltDraft[]>(
@@ -93,12 +123,22 @@ export default function RequestForm({
   const setAlt = (i: number, patch: Partial<AltDraft>) =>
     setAlts((prev) => prev.map((a, j) => (j === i ? { ...a, ...patch } : a)));
 
+  const scroll = useRef<ScrollView>(null);
+  // 申請に足りない項目 (ボタンは無効にせず、押したときと、ボタンの下に表示する)
+  const missing = submitMissing(t, { reviewers: reviewers.length, reason, seller, product: productName });
+
   const save = async (submit: boolean) => {
+    if (submit && missing.length > 0) {
+      setError(`レビューを依頼するには、次を入力してください: ${missing.join('、')}`);
+      scroll.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
     setBusy(submit ? 'submit' : 'save');
     setError(null);
     try {
       await onSave(
         {
+          type_id: typeId,
           kind,
           parent_id: parentId ?? null,
           title: title.trim(),
@@ -125,29 +165,28 @@ export default function RequestForm({
     }
   };
 
-  const canSubmit = !!title.trim() && reviewers.length > 0;
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={{ padding: 12, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={scroll} style={s.screen} contentContainerStyle={{ padding: 12, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
       {error && <Text style={s.error}>{error}</Text>}
 
       <Card title="稟議の種類">
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {KINDS.map((k) => (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {types.map((x) => (
             <Pressable
-              key={k}
-              onPress={() => setKind(k)}
-              style={[s.chip, kind === k && s.chipOn, { flex: 1, alignItems: 'center' }]}
+              key={x.id}
+              onPress={() => setTypeId(x.id)}
+              style={[s.chip, typeId === x.id && s.chipOn, { alignItems: 'center' }]}
               accessibilityRole="radio"
-              accessibilityState={{ checked: kind === k }}
+              accessibilityState={{ checked: typeId === x.id }}
             >
-              <Text style={[s.chipText, kind === k && s.chipTextOn]}>{KIND_TEXT[k].icon} {KIND_TEXT[k].what}</Text>
+              <Text style={[s.chipText, typeId === x.id && s.chipTextOn]}>{x.icon} {x.name}</Text>
             </Pressable>
           ))}
         </View>
       </Card>
 
-      <Card title={t.what}>
+      <Card title={type ? `${type.icon} ${type.name}` : t.what}>
         <Text style={[s.label, { marginTop: 0 }]}>タイトル *</Text>
         <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder={t.titleExample} />
         <Text style={s.label}>{t.price} * ({currency === 'JPY' ? '円' : currency})</Text>
@@ -185,14 +224,24 @@ export default function RequestForm({
         </View>
       </Card>
 
-      <Card title={`${t.reason} *`}>
-        <TextInput
-          style={[s.input, s.multi, { minHeight: 120 }]}
-          multiline
-          value={reason}
-          onChangeText={setReason}
-          placeholder={t.reasonPlaceholder}
-        />
+      <Card
+        title={`${t.reason} *`}
+        right={<Text style={s.link} onPress={() => setReasonPreview((p) => !p)}>{reasonPreview ? '書く' : 'プレビュー'}</Text>}
+      >
+        {reasonPreview ? (
+          <View style={{ minHeight: 120 }}>
+            {reason.trim() ? <Markdown>{reason}</Markdown> : <Text style={s.muted}>プレビューする内容がありません。</Text>}
+          </View>
+        ) : (
+          <TextInput
+            style={[s.input, s.multi, { minHeight: 120 }]}
+            multiline
+            value={reason}
+            onChangeText={setReason}
+            placeholder={t.reasonPlaceholder}
+          />
+        )}
+        <Text style={[s.muted, { marginTop: 6, fontSize: 12 }]}>Markdown が使えます（見出し「## 」・箇条書き「- 」・太字「**太字**」・リンク「[文字](https://…)」など）</Text>
       </Card>
 
       <Card
@@ -243,7 +292,8 @@ export default function RequestForm({
       </Card>
 
       <View style={{ gap: 8 }}>
-        <Button title="レビューを依頼する" variant="primary" onPress={() => save(true)} disabled={!canSubmit || !!busy} busy={busy === 'submit'} />
+        <Button title="レビューを依頼する" variant="primary" onPress={() => save(true)} disabled={!title.trim() || !!busy} busy={busy === 'submit'} />
+        {missing.length > 0 && <Text style={s.muted}>レビューを依頼するには: {missing.join('、')} を入力してください</Text>}
         <Button title="下書き保存" onPress={() => save(false)} disabled={!title.trim() || !!busy} busy={busy === 'save'} />
       </View>
     </ScrollView>

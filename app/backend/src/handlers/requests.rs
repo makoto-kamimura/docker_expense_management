@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     auth::AuthUser,
     error::{ApiError, ApiResult},
-    handlers::{chores, labels::{labels_of, replace_labels}},
+    handlers::{chores, labels::{labels_of, replace_labels}, request_types},
     previews,
     models::{
         ActionInput, LinkPreview, RequestCategory, AlternativeInput, AlternativeProduct, Attachment, CommentInput, ListQuery,
@@ -68,7 +68,8 @@ pub fn permissions(me: &Member, r: &PurchaseRequest, reviewers: &[Reviewer]) -> 
         can_merge: (is_requester || is_reviewer) && s == Approved,
         can_mark_purchased: is_requester && s == Merged,
         can_close: is_requester && s != Draft && !s.is_finished(),
-        can_delete: is_requester && s == Draft,
+        // 申請者は自分の稟議を、管理者はグループの稟議を、状態に関係なく消せる (他人の下書きはそもそも見えない)
+        can_delete: is_requester || me.is_admin,
         can_comment: s != Draft || is_requester,
         can_upload_evidence: is_requester && !s.is_finished(),
         can_upload_receipt: is_requester && matches!(s, Merged | Purchased),
@@ -191,7 +192,7 @@ async fn build_detail(state: &AppState, me: &Member, request: PurchaseRequest) -
             .await?;
     let timeline = timeline(state, id).await?;
     let permissions = permissions(me, &request, &reviewers);
-    const REF_SELECT: &str = "SELECT r.id, r.title, r.kind, r.status, u.name AS requester_name
+    const REF_SELECT: &str = "SELECT r.id, r.title, r.kind, r.type_id, r.status, u.name AS requester_name
            FROM purchase_requests r JOIN users u ON u.id = r.requester_id";
     // 分岐元・分岐先も、他人の下書きは見せない
     let parent: Option<RequestRef> = match request.parent_id {
@@ -251,6 +252,13 @@ pub async fn detail_json(state: &AppState, me: &Member, id: Uuid) -> ApiResult<J
 // 一覧・取得
 // ---------------------------------------------------------------------------
 
+/// 一覧の 1 行に付ける分岐先の数の上限
+const LINKED_CHILDREN_LIMIT: i64 = 20;
+/// 一覧の行に紐づいた稟議 (p = 稟議, pu = 申請者) の JSON
+const LINKED_JSON: &str = "json_build_object('id', p.id, 'title', p.title, 'kind', p.kind, 'type_id', p.type_id,
+        'status', p.status, 'requester_name', pu.name, 'price', p.price, 'actual_price', p.actual_price,
+        'currency', p.currency)";
+
 pub async fn list(
     State(state): State<AppState>,
     AuthUser(me): AuthUser,
@@ -267,7 +275,24 @@ pub async fn list(
                 COALESCE((SELECT json_agg(json_build_object('id', l.id, 'name', l.name, 'color', l.color, 'description', l.description)
                                           ORDER BY l.name)
                             FROM request_labels rl JOIN labels l ON l.id = rl.label_id
-                           WHERE rl.request_id = r.id), '[]'::json) AS labels
+                           WHERE rl.request_id = r.id), '[]'::json) AS labels,
+                COALESCE((SELECT ",
+    );
+    // 紐づいた稟議 (分岐元・分岐先)。詳細画面と同じく、他人の下書きは含めない
+    b.push(LINKED_JSON).push(
+        " FROM purchase_requests p JOIN users pu ON pu.id = p.requester_id
+           WHERE p.id = r.parent_id AND (p.status <> 'draft' OR p.requester_id = ",
+    );
+    // 分岐元がない・見えないときは JSON の null にする (Json<Option<_>> で受けるため)
+    b.push_bind(me.id).push(")), 'null'::json) AS parent, COALESCE((SELECT json_agg(x.j ORDER BY x.created_at) FROM (SELECT ");
+    b.push(LINKED_JSON).push(
+        " AS j, p.created_at FROM purchase_requests p JOIN users pu ON pu.id = p.requester_id
+           WHERE p.parent_id = r.id AND (p.status <> 'draft' OR p.requester_id = ",
+    );
+    b.push_bind(me.id).push(") ORDER BY p.created_at LIMIT ").push(LINKED_CHILDREN_LIMIT.to_string());
+    b.push(") x), '[]'::json) AS children, (SELECT COUNT(*) FROM purchase_requests p WHERE p.parent_id = r.id AND (p.status <> 'draft' OR p.requester_id = ");
+    b.push_bind(me.id).push(
+        ")) AS children_count
            FROM purchase_requests r JOIN users u ON u.id = r.requester_id
           WHERE r.family_id = ",
     );
@@ -301,6 +326,9 @@ pub async fn list(
     }
     if let Some(kind) = q.kind {
         b.push(" AND r.kind = ").push_bind(kind);
+    }
+    if let Some(type_id) = q.type_id {
+        b.push(" AND r.type_id = ").push_bind(type_id);
     }
     if let Some(label) = q.label {
         b.push(" AND EXISTS (SELECT 1 FROM request_labels rl WHERE rl.request_id = r.id AND rl.label_id = ")
@@ -345,11 +373,14 @@ pub async fn get_one(
 pub async fn create(
     State(state): State<AppState>,
     AuthUser(me): AuthUser,
-    Json(input): Json<RequestInput>,
+    Json(mut input): Json<RequestInput>,
 ) -> ApiResult<Json<RequestDetail>> {
     if !me.can_request {
         return Err(ApiError::Forbidden);
     }
+    // 種類を決め、型 (入力項目・完了の表現) はその種類に合わせる
+    let (type_id, kind) = request_types::resolve(&state.db, me.family_id, input.type_id, input.kind, None).await?;
+    input.kind = kind;
     validate_input(&input)?;
     // 分岐元は同じ家族で見える稟議に限る (他の家族・他人の下書きは 404)
     let parent = match input.parent_id {
@@ -365,8 +396,8 @@ pub async fn create(
     let (id,): (Uuid,) = sqlx::query_as(
         "INSERT INTO purchase_requests
             (family_id, requester_id, title, reason, price, currency, seller, product_name,
-             product_url, category, planned_date, notes, kind, end_date, parent_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id",
+             product_url, category, planned_date, notes, kind, end_date, parent_id, type_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id",
     )
     .bind(me.family_id)
     .bind(me.id)
@@ -383,6 +414,7 @@ pub async fn create(
     .bind(input.kind)
     .bind(input.end_date)
     .bind(parent.as_ref().map(|p| p.id))
+    .bind(type_id)
     .fetch_one(&mut *tx)
     .await?;
     replace_reviewers(&mut tx, &me, id, &input.reviewer_ids).await?;
@@ -404,14 +436,21 @@ pub async fn update(
     State(state): State<AppState>,
     AuthUser(me): AuthUser,
     Path(id): Path<Uuid>,
-    Json(input): Json<RequestInput>,
+    Json(mut input): Json<RequestInput>,
 ) -> ApiResult<Json<RequestDetail>> {
-    validate_input(&input)?;
     let old = load_request(&state, &me, id).await?;
     let reviewers = reviewers_of(&state, id).await?;
     if !permissions(&me, &old, &reviewers).can_edit {
         return Err(deny(old.requester_id == me.id));
     }
+    let (type_id, kind) = request_types::resolve(&state.db, me.family_id, input.type_id, input.kind, old.type_id).await?;
+    input.kind = kind;
+    validate_input(&input)?;
+    let (old_type, new_type) = if old.type_id != Some(type_id) {
+        (request_types::name_of(&state.db, old.type_id).await?, request_types::name_of(&state.db, Some(type_id)).await?)
+    } else {
+        (None, None)
+    };
 
     // 変更履歴: 項目ごとに「変更前 → 変更後」を Activity に残す
     let mut changes: Vec<Value> = Vec::new();
@@ -422,6 +461,7 @@ pub async fn update(
     };
     diff("title", json!(old.title), json!(input.title.trim()));
     diff("kind", json!(old.kind), json!(input.kind));
+    diff("type", json!(old_type), json!(new_type));
     diff("reason", json!(old.reason), json!(input.reason.trim()));
     diff("price", json!(old.price), json!(input.price));
     diff("seller", json!(old.seller), json!(input.seller.trim()));
@@ -477,8 +517,8 @@ pub async fn update(
         "UPDATE purchase_requests
             SET title = $1, reason = $2, price = $3, seller = $4, product_name = $5,
                 product_url = $6, category = COALESCE($7, category), planned_date = $8, notes = $9,
-                kind = $10, end_date = $11
-          WHERE id = $12",
+                kind = $10, end_date = $11, type_id = $12
+          WHERE id = $13",
     )
     .bind(input.title.trim())
     .bind(input.reason.trim())
@@ -491,6 +531,7 @@ pub async fn update(
     .bind(clean(&input.notes))
     .bind(input.kind)
     .bind(input.end_date)
+    .bind(type_id)
     .bind(id)
     .execute(&mut *tx)
     .await?;
@@ -989,4 +1030,84 @@ fn validate_input(input: &RequestInput) -> ApiResult<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn member(is_admin: bool) -> Member {
+        Member {
+            id: Uuid::new_v4(),
+            family_id: Uuid::nil(),
+            email: String::new(),
+            name: String::new(),
+            avatar_url: None,
+            can_request: true,
+            can_review: true,
+            is_admin,
+        }
+    }
+
+    fn request(requester_id: Uuid, status: RequestStatus) -> PurchaseRequest {
+        PurchaseRequest {
+            id: Uuid::new_v4(),
+            family_id: Uuid::nil(),
+            requester_id,
+            kind: RequestKind::Purchase,
+            type_id: None,
+            parent_id: None,
+            title: String::new(),
+            reason: String::new(),
+            price: 0,
+            currency: "JPY".into(),
+            seller: String::new(),
+            product_name: None,
+            product_url: None,
+            category: RequestCategory::Other,
+            planned_date: None,
+            end_date: None,
+            notes: None,
+            status,
+            submitted_at: None,
+            approved_at: None,
+            merged_at: None,
+            merged_by: None,
+            purchased_at: None,
+            purchase_date: None,
+            actual_price: None,
+            order_number: None,
+            final_product_url: None,
+            closed_at: None,
+            close_reason: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    const ALL: [RequestStatus; 4] =
+        [RequestStatus::Draft, RequestStatus::UnderReview, RequestStatus::Merged, RequestStatus::Purchased];
+
+    #[test]
+    fn requester_can_delete_own_request_in_any_status() {
+        let me = member(false);
+        for st in ALL {
+            assert!(permissions(&me, &request(me.id, st), &[]).can_delete, "{st:?}");
+        }
+    }
+
+    #[test]
+    fn admin_can_delete_others_request() {
+        let admin = member(true);
+        for st in ALL {
+            assert!(permissions(&admin, &request(Uuid::new_v4(), st), &[]).can_delete, "{st:?}");
+        }
+    }
+
+    #[test]
+    fn other_member_cannot_delete() {
+        let me = member(false);
+        assert!(!permissions(&me, &request(Uuid::new_v4(), RequestStatus::Merged), &[]).can_delete);
+    }
 }

@@ -105,6 +105,7 @@ function requestPayload(formData: FormData) {
     alternatives = [];
   }
   return {
+    type_id: opt('type_id'),
     kind: text('kind') || 'purchase',
     parent_id: opt('parent_id'),
     title: text('title'),
@@ -386,6 +387,46 @@ export async function updateLabelAction(
 
 export async function deleteLabelAction(labelId: string): Promise<Result> {
   const r = await attempt(() => apiFetch(`/labels/${labelId}`, { method: 'DELETE' }));
+  revalidatePath('/', 'layout');
+  return r;
+}
+
+// ---------------------------------------------------------------------------
+// 稟議の種類 (管理者)
+// ---------------------------------------------------------------------------
+
+export async function createRequestTypeAction(formData: FormData): Promise<Result> {
+  const r = await attempt(() =>
+    apiFetch('/request-types', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: String(formData.get('name') ?? ''),
+        icon: String(formData.get('icon') ?? '').trim(),
+        base: String(formData.get('base') ?? ''),
+      }),
+    }),
+  );
+  revalidatePath('/', 'layout');
+  return r;
+}
+
+export async function updateRequestTypeAction(
+  typeId: string,
+  input: { name: string; icon: string; hidden: boolean },
+): Promise<Result> {
+  const r = await attempt(() => apiFetch(`/request-types/${typeId}`, { method: 'PUT', body: JSON.stringify(input) }));
+  revalidatePath('/', 'layout');
+  return r;
+}
+
+export async function reorderRequestTypesAction(ids: string[]): Promise<Result> {
+  const r = await attempt(() => apiFetch('/request-types/order', { method: 'PUT', body: JSON.stringify({ ids }) }));
+  revalidatePath('/', 'layout');
+  return r;
+}
+
+export async function deleteRequestTypeAction(typeId: string): Promise<Result> {
+  const r = await attempt(() => apiFetch(`/request-types/${typeId}`, { method: 'DELETE' }));
   revalidatePath('/', 'layout');
   return r;
 }

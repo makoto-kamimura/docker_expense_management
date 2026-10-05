@@ -6,10 +6,13 @@ import { checkpoints, dateRange, fmtDateTime, money } from '@/format';
 import { AttachmentList } from '@/components/Attachments';
 import { C, StatusBadge, s } from '@/components/ui';
 import { DECISION_LABEL, KIND_TEXT, type RequestDetail } from '@/types';
+import { useTheme } from '@/theme';
+import Markdown from '@/components/Markdown';
 
 
 /** 申請のまとめ資料。横スワイプでスライドを切り替える (Web の Summary と同じ構成)。 */
 export default function SummaryScreen() {
+  useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
   const pager = useRef<ScrollView>(null);
@@ -30,7 +33,7 @@ export default function SummaryScreen() {
   const comments = d.timeline.filter((e) => e.type === 'comment').slice(-4);
   const go = (i: number) => { pager.current?.scrollTo({ x: i * width, animated: true }); setPage(i); };
   const H = ({ children }: { children: string }) => (
-    <Text style={{ fontSize: 20, fontWeight: '700', borderBottomColor: '#fd8c73', borderBottomWidth: 3, alignSelf: 'flex-start', paddingBottom: 4, marginBottom: 14 }}>{children}</Text>
+    <Text style={{ fontSize: 20, fontWeight: '700', borderBottomColor: C.underline, borderBottomWidth: 3, alignSelf: 'flex-start', paddingBottom: 4, marginBottom: 14 }}>{children}</Text>
   );
   const Meta = ({ k, v }: { k: string; v: string }) => (
     <View style={{ borderLeftColor: C.border, borderLeftWidth: 3, paddingLeft: 10, marginTop: 10 }}>
@@ -55,13 +58,13 @@ export default function SummaryScreen() {
     </View>,
     <View key="reason">
       <H>{t.reason}</H>
-      <Text style={{ fontSize: 17, lineHeight: 26 }}>{r.reason || '—'}</Text>
+      {r.reason ? <Markdown fontSize={17}>{r.reason}</Markdown> : <Text style={{ fontSize: 17, lineHeight: 26, color: C.fg }}>—</Text>}
       {r.notes && <Text style={[s.muted, { marginTop: 16 }]}>メモ: {r.notes}</Text>}
     </View>,
     <View key="product">
       <H>{t.compare}</H>
       {[{ id: 'this', name: `${r.product_name ?? r.title}（この稟議）`, price: r.price, url: r.product_url, notes: r.seller }, ...d.alternatives].map((a) => (
-        <View key={a.id} style={{ flexDirection: 'row', paddingVertical: 10, borderBottomColor: C.borderMuted, borderBottomWidth: 1, gap: 8, backgroundColor: a.id === 'this' ? '#ddf4ff' : undefined }}>
+        <View key={a.id} style={{ flexDirection: 'row', paddingVertical: 10, borderBottomColor: C.borderMuted, borderBottomWidth: 1, gap: 8, backgroundColor: a.id === 'this' ? C.accentSubtle : undefined }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontWeight: '600' }}>{a.name}</Text>
             {a.notes && <Text style={s.muted}>{a.notes}</Text>}
@@ -100,7 +103,7 @@ export default function SummaryScreen() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: 10, gap: 6 }} style={{ flexGrow: 0 }}>
         {TITLES.map((t, i) => (
           <Pressable key={t} onPress={() => go(i)} style={[s.chip, i === page && { backgroundColor: C.fg, borderColor: C.fg }]}>
-            <Text style={[s.chipText, i === page && { color: '#fff', fontWeight: '700' }]}>{i + 1}. {t}</Text>
+            <Text style={[s.chipText, i === page && { color: C.card, fontWeight: '700' }]}>{i + 1}. {t}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -113,7 +116,7 @@ export default function SummaryScreen() {
       >
         {slides.map((slide, i) => (
           <ScrollView key={i} style={{ width }} contentContainerStyle={{ padding: 12, paddingBottom: 32 }}>
-            <View style={{ backgroundColor: '#fff', borderRadius: 12, borderColor: C.border, borderWidth: 1, padding: 20, minHeight: 420 }}>{slide}</View>
+            <View style={{ backgroundColor: C.card, borderRadius: 12, borderColor: C.border, borderWidth: 1, padding: 20, minHeight: 420 }}>{slide}</View>
             <Text style={[s.muted, { textAlign: 'center', marginTop: 8 }]}>{i + 1} / {slides.length}</Text>
           </ScrollView>
         ))}

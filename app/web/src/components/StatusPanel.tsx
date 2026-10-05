@@ -1,7 +1,7 @@
 'use client';
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
-import { deleteRequestAction, requestActionAction } from '@/lib/actions';
+import { requestActionAction } from '@/lib/actions';
 import { money } from '@/lib/format';
 import { KIND_TEXT, type RequestDetail } from '@/lib/types';
 import ConfirmButton from './ConfirmButton';
@@ -37,22 +37,12 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
     return (
       <Panel icon="pr-draft" color="gray" title="この稟議は下書きです" sub="グループにはまだ見えていません。内容を確認してレビューを依頼しましょう。">
         {errorBox}
-        {p.can_edit && !p.can_submit && <p className="muted">レビューを依頼するには、編集画面でレビュアーを1人以上選んでください。</p>}
+        {p.can_edit && !p.can_submit && <p className="muted">レビューを依頼するには、レビュアーを1人以上選んでください。</p>}
         <div className="actions">
           {p.can_edit && <Link className="btn" href={`/requests/${r.id}/edit`}>編集</Link>}
           {p.can_submit && <button className="btn-primary" disabled={pending} onClick={() => run('submit')}>レビューを依頼する</button>}
-          {p.can_delete && (
-            <ConfirmButton
-              label="削除"
-              className="btn-danger"
-              title="この下書きを削除しますか？"
-              confirmLabel="削除する"
-              confirmClassName="btn-danger"
-              onConfirm={() => deleteRequestAction(r.id)}
-            >
-              <p>この操作は取り消せません。</p>
-            </ConfirmButton>
-          )}
+          {/* レビュアーがまだいないときは、ボタンの代わりに編集画面へ案内する */}
+          {p.can_edit && !p.can_submit && <Link className="btn btn-primary" href={`/requests/${r.id}/edit`}>レビュアーを選んで依頼する</Link>}
         </div>
       </Panel>
     );

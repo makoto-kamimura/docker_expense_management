@@ -1,13 +1,14 @@
 'use client';
 import { useState, useTransition } from 'react';
 import {
-  KINDS,
   KIND_TEXT,
+  submitMissing,
   type Label,
   type Member,
-  type RequestKind,
+  type RequestType,
 } from '@/lib/types';
 import LabelChip from './LabelChip';
+import Markdown from './Markdown';
 
 export interface AlternativeDraft {
   name: string;
@@ -17,7 +18,7 @@ export interface AlternativeDraft {
 }
 
 export interface RequestDraft {
-  kind?: RequestKind;
+  type_id?: string | null;
   title?: string;
   reason?: string;
   price?: number;
@@ -39,6 +40,7 @@ export default function RequestForm({
   defaults,
   members,
   labels,
+  types,
   selfId,
   currency,
   canSubmit = true,
@@ -48,8 +50,10 @@ export default function RequestForm({
   defaults?: RequestDraft;
   /** Reviewer 候補 (同じ家族のメンバー) */
   members: Member[];
-  /** 家族のラベル (付けるものを選ぶ) */
+  /** グループのラベル (付けるものを選ぶ) */
   labels: Label[];
+  /** 選べる種類 (表示中の種類と、編集中の稟議に付いている種類) */
+  types: RequestType[];
   selfId: string;
   currency: string;
   /** false なら「申請する」ボタンを出さない (Submitted 以降の状態では使わない想定) */
@@ -59,8 +63,14 @@ export default function RequestForm({
 }) {
   const [alternatives, setAlternatives] = useState<AlternativeDraft[]>(defaults?.alternatives ?? []);
   const [reviewers, setReviewers] = useState<string[]>(defaults?.reviewer_ids ?? []);
-  const [kind, setKind] = useState<RequestKind>(defaults?.kind ?? 'purchase');
+  const [typeId, setTypeId] = useState<string>(defaults?.type_id ?? types[0]?.id ?? '');
   const [labelIds, setLabelIds] = useState<string[]>(defaults?.label_ids ?? []);
+  // 理由は Markdown で書ける。「書く / プレビュー」を切り替える (入力欄は隠すだけなので、値はフォームで送られる)
+  const [reasonText, setReasonText] = useState(defaults?.reason ?? '');
+  const [reasonPreview, setReasonPreview] = useState(false);
+  const type = types.find((x) => x.id === typeId) ?? types[0];
+  // 入力項目や完了の表現は、種類の型で決まる
+  const kind = type?.base ?? 'purchase';
   const t = KIND_TEXT[kind];
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -78,6 +88,20 @@ export default function RequestForm({
         const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
         const fd = new FormData(e.currentTarget);
         fd.set('intent', submitter?.value ?? 'save');
+        if (submitter?.value === 'submit') {
+          // 申請に足りない項目があれば、保存する前に伝える (下書きだけ作られてエラーになるのを防ぐ)
+          const missing = submitMissing(t, {
+            reviewers: reviewers.length,
+            reason: String(fd.get('reason') ?? ''),
+            seller: String(fd.get('seller') ?? ''),
+            product: String(fd.get('product_name') ?? ''),
+          });
+          if (missing.length > 0) {
+            setError(`レビューを依頼するには、次を入力してください: ${missing.join('、')}`);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+        }
         fd.set(
           'alternatives_json',
           JSON.stringify(
@@ -107,21 +131,22 @@ export default function RequestForm({
     >
       {error && <div className="error" role="alert">{error}</div>}
       {parentId && <input type="hidden" name="parent_id" value={parentId} />}
+      <input type="hidden" name="kind" value={kind} />
 
       <div className="box">
         <div className="box-head"><h2>稟議の種類</h2></div>
         <div className="box-body">
           <div className="chips" role="radiogroup" aria-label="稟議の種類">
-            {KINDS.map((k) => (
-              <label key={k} className={`chip${kind === k ? ' chip-on' : ''}`}>
+            {types.map((x) => (
+              <label key={x.id} className={`chip${typeId === x.id ? ' chip-on' : ''}`}>
                 <input
                   type="radio"
-                  name="kind"
-                  value={k}
-                  checked={kind === k}
-                  onChange={() => setKind(k)}
+                  name="type_id"
+                  value={x.id}
+                  checked={typeId === x.id}
+                  onChange={() => setTypeId(x.id)}
                 />
-                {KIND_TEXT[k].icon} {KIND_TEXT[k].what}
+                {x.icon} {x.name}
               </label>
             ))}
           </div>
@@ -129,7 +154,7 @@ export default function RequestForm({
       </div>
 
       <div className="box">
-        <div className="box-head"><h2>{t.what}</h2></div>
+        <div className="box-head"><h2>{type ? `${type.icon} ${type.name}` : t.what}</h2></div>
         <div className="box-body">
           <div className="row">
             <label htmlFor="title">タイトル<span className="req">*</span></label>
@@ -190,7 +215,13 @@ export default function RequestForm({
       </div>
 
       <div className="box">
-        <div className="box-head"><h2>{t.reason}<span className="req">*</span></h2></div>
+        <div className="box-head">
+          <h2>{t.reason}<span className="req">*</span></h2>
+          <nav className="md-tabs" aria-label={`${t.reason}の表示`}>
+            <button type="button" className={reasonPreview ? '' : 'on'} aria-pressed={!reasonPreview} onClick={() => setReasonPreview(false)}>書く</button>
+            <button type="button" className={reasonPreview ? 'on' : ''} aria-pressed={reasonPreview} onClick={() => setReasonPreview(true)}>プレビュー</button>
+          </nav>
+        </div>
         <div className="box-body">
           <div className="row" style={{ marginBottom: 8 }}>
             <label htmlFor="reason" className="sr-only">{t.reason}</label>
@@ -198,12 +229,21 @@ export default function RequestForm({
               id="reason"
               name="reason"
               rows={6}
-              defaultValue={defaults?.reason ?? ''}
+              value={reasonText}
+              onChange={(e) => setReasonText(e.target.value)}
               placeholder={t.reasonPlaceholder}
+              hidden={reasonPreview}
             />
+            {reasonPreview && (
+              <div className="md-preview">
+                {reasonText.trim() ? <Markdown>{reasonText}</Markdown> : <span className="muted">プレビューする内容がありません。</span>}
+              </div>
+            )}
           </div>
           <p className="muted small">
             {t.reasonHint}
+            <br />
+            Markdown が使えます（見出し <code>## </code>・箇条書き <code>- </code>・太字 <code>**太字**</code>・リンク <code>[文字](https://…)</code> など）。
           </p>
         </div>
       </div>
@@ -274,6 +314,9 @@ export default function RequestForm({
       </div>
 
       <div className="actions" style={{ justifyContent: 'flex-end' }}>
+        {canSubmit && reviewers.length === 0 && (
+          <span className="muted small">レビューを依頼するには、レビュアーを1人以上選んでください</span>
+        )}
         <button type="submit" value="save" disabled={pending}>下書き保存</button>
         {canSubmit && (
           <button type="submit" value="submit" className="btn-primary" disabled={pending}>

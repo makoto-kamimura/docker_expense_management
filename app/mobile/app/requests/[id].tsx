@@ -7,22 +7,32 @@ import { AttachmentList, pickAndUpload } from '@/components/Attachments';
 import { Avatar, Button, C, Card, Fact, StatusBadge, s } from '@/components/ui';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
 import { LabelEditor } from '@/components/Labels';
-import { DECISION_LABEL, KIND_TEXT, statusLabel, type Me, type RequestDetail } from '@/types';
+import { DECISION_LABEL, KIND_TEXT, statusLabel, typeOf, type Me, type RequestDetail, type RequestType } from '@/types';
+import { useTheme } from '@/theme';
+import Markdown from '@/components/Markdown';
 
 type Action = 'submit' | 'approve' | 'request-changes' | 'reject' | 'merge' | 'close' | 'reopen';
 
 export default function RequestDetailScreen() {
+  useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [d, setD] = useState<RequestDetail | null>(null);
   const [me, setMe] = useState<Me | null>(null);
+  const [types, setTypes] = useState<RequestType[]>([]);
   const [token, setTokenState] = useState<string | null>(null);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [detail, self, tk] = await Promise.all([apiFetch<RequestDetail>(`/requests/${id}`), apiFetch<Me>('/me'), getToken()]);
+      const [detail, self, tk, typeList] = await Promise.all([
+        apiFetch<RequestDetail>(`/requests/${id}`),
+        apiFetch<Me>('/me'),
+        getToken(),
+        apiFetch<RequestType[]>('/request-types'),
+      ]);
       setD(detail);
+      setTypes(typeList);
       setMe(self);
       setTokenState(tk);
     } catch (e) {
@@ -82,7 +92,8 @@ export default function RequestDetailScreen() {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={{ padding: 12, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
-      <Text style={{ fontSize: 22, color: C.fg }}>{r.kind !== 'purchase' ? `${t.icon} ` : ''}{r.title}</Text>
+      <Text style={{ fontSize: 22, color: C.fg }}>{typeOf(types, r.type_id, r.kind).icon} {r.title}</Text>
+      <Text style={s.muted}>種類: {typeOf(types, r.type_id, r.kind).name}</Text>
       <Text style={{ fontSize: 24, fontWeight: '700', color: C.fg, marginVertical: 4 }}>{price}</Text>
       <StatusBadge status={r.status} kind={r.kind} hint />
       {d.parent && (
@@ -94,12 +105,12 @@ export default function RequestDetailScreen() {
         #{r.id.slice(0, 7)} · 申請者: {d.requester.name} · レビュアー: {d.reviewers.map((x) => `${x.name}（${DECISION_LABEL[x.decision]}）`).join('、') || '—'}
       </Text>
 
-      <View style={{ backgroundColor: '#fff', borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+      <View style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 12 }}>
         <LabelEditor detail={d} onSaved={setD} />
       </View>
 
       <Card title={t.reason}>
-        <Text style={{ fontSize: 15, lineHeight: 22, color: C.fg }}>{r.reason || '—'}</Text>
+        {r.reason ? <Markdown>{r.reason}</Markdown> : <Text style={{ fontSize: 15, lineHeight: 22, color: C.fg }}>—</Text>}
       </Card>
 
       <Card
@@ -169,12 +180,17 @@ export default function RequestDetailScreen() {
         ) : (
           d.children.map((c) => (
             <Pressable key={c.id} onPress={() => router.push(`/requests/${c.id}`)} style={{ paddingVertical: 6 }}>
-              <Text style={[s.link, { fontWeight: '600' }]}>{KIND_TEXT[c.kind].icon} {c.title}</Text>
+              <Text style={[s.link, { fontWeight: '600' }]}>{typeOf(types, c.type_id, c.kind).icon} {c.title}</Text>
               <Text style={s.muted}>#{c.id.slice(0, 7)} · {c.requester_name} · {statusLabel(c.kind, c.status)}</Text>
             </Pressable>
           ))
         )}
       </Card>
+
+      {/* 内容をコピーして新しい下書きを作る (どの状態の稟議からでもできる) */}
+      {me.can_request && (
+        <Button title="複製して下書きを作る" onPress={() => router.push(`/requests/new?copy=${r.id}`)} style={{ marginBottom: 12 }} />
+      )}
 
       <Card
         title="申請者の家事コミット"
@@ -201,7 +217,7 @@ export default function RequestDetailScreen() {
         e.type === 'comment' ? (
           <View key={e.id} style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
             <Avatar name={e.user?.name ?? '?'} size={28} />
-            <View style={{ flex: 1, backgroundColor: '#fff', borderColor: C.border, borderWidth: 1, borderRadius: 8 }}>
+            <View style={{ flex: 1, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8 }}>
               <Text style={{ backgroundColor: C.bg, padding: 8, fontSize: 13 }}>
                 <Text style={{ fontWeight: '700' }}>{e.user?.name ?? '退会したメンバー'}</Text> <Text style={s.muted}>{timeAgo(e.created_at)}にコメント</Text>
               </Text>
@@ -216,22 +232,20 @@ export default function RequestDetailScreen() {
       )}
 
       {/* 次にやること (Web の StatusPanel と同じ分岐) */}
-      <View style={{ backgroundColor: '#fff', borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 14, marginVertical: 12, gap: 8 }}>
+      <View style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 14, marginVertical: 12, gap: 8 }}>
         {r.status === 'draft' && (
           <>
             <Text style={{ fontWeight: '700' }}>この稟議は下書きです</Text>
             {p.can_edit && <Button title="編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
             {p.can_submit ? (
               <Button title="レビューを依頼する" variant="primary" busy={busy} onPress={() => run('submit')} />
-            ) : (
-              <Text style={s.muted}>レビューを依頼するには、レビュアーを1人以上選んでください。</Text>
-            )}
-            {p.can_delete && (
-              <Button title="削除" variant="danger" onPress={() => confirm('この下書きを削除しますか？', 'この操作は取り消せません。', '削除する', async () => {
-                await apiFetch(`/requests/${r.id}`, { method: 'DELETE' });
-                router.back();
-              }, true)} />
-            )}
+            ) : p.can_edit ? (
+              // レビュアーがまだいないときは、ボタンの代わりに編集画面へ案内する
+              <>
+                <Text style={s.muted}>レビューを依頼するには、レビュアーを1人以上選んでください。</Text>
+                <Button title="レビュアーを選んで依頼する" variant="primary" onPress={() => router.push(`/requests/edit/${r.id}`)} />
+              </>
+            ) : null}
           </>
         )}
 
@@ -325,6 +339,27 @@ export default function RequestDetailScreen() {
             <Text style={[s.link, { textAlign: 'right', fontWeight: '600', opacity: comment.trim() ? 1 : 0.4 }]}>コメントする</Text>
           </Pressable>
         </View>
+      )}
+
+      {/* 申請者は自分の稟議を、管理者はグループの稟議を、状態に関係なく消せる */}
+      {p.can_delete && (
+        <Button
+          title="この稟議を削除"
+          variant="danger"
+          style={{ marginTop: 24 }}
+          onPress={() =>
+            confirm(
+              'この稟議を削除しますか？',
+              `コメント・添付・履歴もすべて消え、取り消せません。${r.status === 'purchased' ? '\nダッシュボードの支出の集計からも消えます。' : ''}`,
+              '削除する',
+              async () => {
+                await apiFetch(`/requests/${r.id}`, { method: 'DELETE' });
+                router.back();
+              },
+              true,
+            )
+          }
+        />
       )}
     </ScrollView>
   );
