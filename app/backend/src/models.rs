@@ -146,6 +146,8 @@ pub struct PurchaseRequest {
     /// お出かけの帰る日 (日帰りなら None)
     pub end_date: Option<NaiveDate>,
     pub notes: Option<String>,
+    /// 承認したらしてほしいこと (Markdown)。書かれていれば、済んでいないときに申請者が再オープンできる
+    pub approval_tasks: Option<String>,
     pub status: RequestStatus,
     pub submitted_at: Option<DateTime<Utc>>,
     pub approved_at: Option<DateTime<Utc>>,
@@ -644,6 +646,9 @@ pub struct RequestInput {
     pub planned_date: Option<NaiveDate>,
     pub end_date: Option<NaiveDate>,
     pub notes: Option<String>,
+    /// 承認したらしてほしいこと (Markdown)
+    #[serde(default)]
+    pub approval_tasks: Option<String>,
     #[serde(default)]
     pub reviewer_ids: Vec<Uuid>,
     /// 付けるラベル (この集合に置き換える)。省略時はラベルを変えない

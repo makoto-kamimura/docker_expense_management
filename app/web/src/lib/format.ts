@@ -72,6 +72,7 @@ const FIELD_LABEL: Record<string, string> = {
   kind: '型',
   type: '種類',
   notes: 'メモ',
+  'approval tasks': '承認したらしてほしいこと',
   reviewers: 'レビュアー',
   alternatives: '比較商品',
 };
@@ -94,7 +95,10 @@ export function describeEvent(e: Extract<TimelineEntry, { type: 'event' }>, kind
     case 'merged': return `${who} がマージしました`;
     case 'purchased': return `${who} が${KIND_TEXT[kind].doneEvent}`;
     case 'withdrawn': return `${who} が申請を取り下げました`;
-    case 'reopened': return `${who} が再オープンしました`;
+    case 'reopened':
+      return e.metadata.reason === 'approval_tasks_not_done'
+        ? `${who} が、承認したらしてほしいことが済んでいないため再オープンしました`
+        : `${who} が再オープンしました`;
     case 'updated': {
       const fields = ((e.metadata.fields as string[] | undefined) ?? []).map((f) => fieldLabel(f, kind));
       return `${who} が${fields.length ? `${fields.join('・')}を` : '内容を'}更新しました`;

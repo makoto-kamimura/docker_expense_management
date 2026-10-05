@@ -79,6 +79,16 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
           </div>
           </div>
 
+          {r.approval_tasks && (
+            <section className="box indent">
+              <div className="box-head">
+                <h2>承認したらしてほしいこと</h2>
+                <span className="muted small">{d.requester.name} からレビュアーへのお願い</span>
+              </div>
+              <div className="box-body"><Markdown>{r.approval_tasks}</Markdown></div>
+            </section>
+          )}
+
           <section className="box indent">
             <div className="box-head">
               <h2>{t.section}</h2>

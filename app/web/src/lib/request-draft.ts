@@ -16,6 +16,7 @@ export function draftFromDetail(d: RequestDetail): RequestDraft {
     planned_date: r.planned_date,
     end_date: r.end_date,
     notes: r.notes,
+    approval_tasks: r.approval_tasks,
     reviewer_ids: d.reviewers.map((x) => x.id),
     alternatives: d.alternatives.map((a) => ({
       name: a.name,

@@ -59,6 +59,12 @@ export default function SummaryScreen() {
     <View key="reason">
       <H>{t.reason}</H>
       {r.reason ? <Markdown fontSize={17}>{r.reason}</Markdown> : <Text style={{ fontSize: 17, lineHeight: 26, color: C.fg }}>—</Text>}
+      {r.approval_tasks && (
+        <View style={{ marginTop: 16 }}>
+          <Text style={[s.muted, { marginBottom: 4 }]}>承認したらしてほしいこと</Text>
+          <Markdown>{r.approval_tasks}</Markdown>
+        </View>
+      )}
       {r.notes && <Text style={[s.muted, { marginTop: 16 }]}>メモ: {r.notes}</Text>}
     </View>,
     <View key="product">

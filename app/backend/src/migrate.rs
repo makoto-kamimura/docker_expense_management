@@ -106,6 +106,8 @@ ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS end_date DATE;
 -- 分岐元の稟議 (「この稟議の後でやりたいこと」などを派生させたとき)
 ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES purchase_requests(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_requests_parent ON purchase_requests(parent_id);
+-- 承認したらしてほしいこと (申請者からレビュアーへのお願い。Markdown)。済んでいなければ申請者が再オープンできる
+ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS approval_tasks TEXT;
 CREATE INDEX IF NOT EXISTS idx_requests_family    ON purchase_requests(family_id);
 CREATE INDEX IF NOT EXISTS idx_requests_requester ON purchase_requests(requester_id);
 CREATE INDEX IF NOT EXISTS idx_requests_status    ON purchase_requests(status);

@@ -21,6 +21,8 @@ export default function RequestDetailScreen() {
   const [types, setTypes] = useState<RequestType[]>([]);
   const [token, setTokenState] = useState<string | null>(null);
   const [comment, setComment] = useState('');
+  // 承認後の再オープンに添える「済んでいないこと」(下のコメント欄とは別に持つ)
+  const [reopenNote, setReopenNote] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -50,15 +52,18 @@ export default function RequestDetailScreen() {
   const productPreview = r.product_url ? d.previews.find((pv) => pv.url === r.product_url) : undefined;
   const receipts = d.attachments.filter((a) => a.kind === 'receipt');
 
-  const run = async (action: Action, withComment = false) => {
+  const run = async (action: Action, withComment = false, text = comment) => {
     setBusy(true);
     try {
       const next = await apiFetch<RequestDetail>(`/requests/${id}/${action}`, {
         method: 'POST',
-        body: JSON.stringify({ comment: withComment ? comment.trim() || null : null }),
+        body: JSON.stringify({ comment: withComment ? text.trim() || null : null }),
       });
       setD(next);
-      if (withComment) setComment('');
+      if (withComment) {
+        setComment('');
+        setReopenNote('');
+      }
     } catch (e) {
       Alert.alert('更新できませんでした', (e as Error).message);
     } finally {
@@ -88,6 +93,37 @@ export default function RequestDetailScreen() {
   };
 
   const withdraw = () => confirm('この稟議を取り下げますか？', '稟議はクローズされます。', '取り下げる', () => run('close'), true);
+  // 承認したらしてほしいことが済んでいないとき (承認済み・マージ済み)。申請者が、済んでいないことを書いて戻す
+  const tasksFollowUp = r.approval_tasks && (r.status === 'approved' || r.status === 'merged') && (
+    <View style={{ marginTop: 8, gap: 6 }}>
+      <Text style={s.muted}>
+        {r.requester_id === me.id ? 'レビュアーへのお願い (承認したらしてほしいこと)' : `${d.requester.name} からのお願い (承認したらしてほしいこと)`}
+      </Text>
+      <View style={{ borderColor: C.border, borderWidth: 1, borderRadius: 6, padding: 8 }}>
+        <Markdown>{r.approval_tasks}</Markdown>
+      </View>
+      {p.can_reopen && (
+        <>
+          <Text style={s.muted}>お願いしたことが済んでいなければ、再オープンしてもう一度レビューしてもらえます。</Text>
+          <TextInput style={[s.input, s.multi]} multiline value={reopenNote} onChangeText={setReopenNote} placeholder="済んでいないこと (必須)" />
+          <Button
+            title="お願いが済んでいないので再オープン"
+            busy={busy}
+            disabled={!reopenNote.trim()}
+            onPress={() =>
+              confirm(
+                'この稟議を再オープンしますか？',
+                '承認したらしてほしいことが済んでいないため、レビュー待ちに戻してもう一度レビューしてもらいます。レビュアーの判定・承認・マージの記録はリセットされます。',
+                '再オープンする',
+                () => run('reopen', true, reopenNote),
+              )
+            }
+          />
+        </>
+      )}
+    </View>
+  );
+
   const reject = () => confirm('この稟議を却下しますか？', '稟議はクローズされます。', '却下する', () => run('reject', true), true);
 
   return (
@@ -112,6 +148,12 @@ export default function RequestDetailScreen() {
       <Card title={t.reason}>
         {r.reason ? <Markdown>{r.reason}</Markdown> : <Text style={{ fontSize: 15, lineHeight: 22, color: C.fg }}>—</Text>}
       </Card>
+
+      {r.approval_tasks && (
+        <Card title="承認したらしてほしいこと" ja={`${d.requester.name} からレビュアーへのお願い`}>
+          <Markdown>{r.approval_tasks}</Markdown>
+        </Card>
+      )}
 
       <Card
         title={t.section}
@@ -256,7 +298,13 @@ export default function RequestDetailScreen() {
               <Text style={s.ja}>金額・理由・リンク・資料を確認してください。</Text>
               <TextInput style={[s.input, s.multi]} multiline value={comment} onChangeText={setComment} placeholder="コメント (修正依頼のときは必須)" />
               <Button title="承認する" variant="primary" busy={busy} onPress={() =>
-                confirm('この稟議を承認しますか？', `${t.thing}の稟議を承認します。\n\n${t.priceShort}\n${price}`, '承認する', () => run('approve', true))} />
+                confirm(
+                  'この稟議を承認しますか？',
+                  `${t.thing}の稟議を承認します。\n\n${t.priceShort}\n${price}` +
+                    (r.approval_tasks ? `\n\n承認したら、次のことをお願いされています:\n${r.approval_tasks}` : ''),
+                  '承認する',
+                  () => run('approve', true),
+                )} />
               <Button title="修正を依頼" disabled={!comment.trim()} onPress={() => run('request-changes', true)} />
               <Button title="コメントだけ送る" disabled={!comment.trim() || busy} onPress={postComment} />
               <Button title="却下" variant="danger" onPress={reject} />
@@ -293,6 +341,7 @@ export default function RequestDetailScreen() {
               <Text style={s.muted}>マージできるのは申請者かレビュアーです。</Text>
             )}
             {p.can_reject && <Button title="却下" variant="danger" onPress={reject} />}
+            {tasksFollowUp}
           </>
         )}
 
@@ -301,6 +350,7 @@ export default function RequestDetailScreen() {
             <Text style={{ fontWeight: '700', color: C.purple }}>マージ済み</Text>
             <Text style={s.muted}>{t.mergedSub}</Text>
             {p.can_mark_purchased && <Button title={t.markDone} variant="blue" onPress={() => router.push(`/requests/purchase/${r.id}`)} />}
+            {tasksFollowUp}
           </>
         )}
 

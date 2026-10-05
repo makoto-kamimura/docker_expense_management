@@ -57,6 +57,12 @@ export default async function SummaryPage({ params }: { params: { id: string } }
           <div className="slide-block">
             {r.reason ? <Markdown className="markdown-lg">{r.reason}</Markdown> : <p style={{ fontSize: 18 }}>—</p>}
           </div>
+          {r.approval_tasks && (
+            <div className="slide-block" style={{ marginTop: 16 }}>
+              <h3>承認したらしてほしいこと</h3>
+              <Markdown>{r.approval_tasks}</Markdown>
+            </div>
+          )}
           {r.notes && (
             <div className="slide-block" style={{ marginTop: 16 }}>
               <h3>メモ</h3>
