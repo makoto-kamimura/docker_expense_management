@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/auth/register", post(handlers::auth::register))
         .route("/auth/login", post(handlers::auth::login))
         .route("/auth/refresh", post(handlers::auth::refresh))
-        .route("/me", get(handlers::auth::me))
+        .route("/me", get(handlers::auth::me).put(handlers::auth::update_me))
         .route("/me/onboarded", post(handlers::auth::complete_onboarding))
         .route("/ocr", post(handlers::ocr::scan))
         .route("/family", get(handlers::family::get).put(handlers::family::update))

@@ -11,7 +11,7 @@ use crate::{
         request_types,
         family::{family_info, generate_invite_code},
     },
-    models::{AuthResp, LoginReq, MeResp, RegisterReq, User},
+    models::{AuthResp, LoginReq, MeResp, MeUpdate, Member, RegisterReq, User},
     state::AppState,
 };
 
@@ -129,17 +129,52 @@ pub async fn refresh(State(state): State<AppState>, headers: HeaderMap) -> ApiRe
 }
 
 pub async fn me(State(state): State<AppState>, AuthUser(me): AuthUser) -> ApiResult<Json<MeResp>> {
+    Ok(Json(me_resp(&state, me).await?))
+}
+
+async fn me_resp(state: &AppState, me: Member) -> ApiResult<MeResp> {
     let (onboarded,): (bool,) =
         sqlx::query_as("SELECT onboarded_at IS NOT NULL FROM users WHERE id = $1")
             .bind(me.id)
             .fetch_one(&state.db)
             .await?;
-    let family = family_info(&state, &me).await?;
-    Ok(Json(MeResp {
+    let family = family_info(state, &me).await?;
+    Ok(MeResp {
         member: me,
         family,
         onboarded,
-    }))
+    })
+}
+
+/// 表示名の長さの上限 (文字数)
+const MAX_NAME: usize = 50;
+
+/// 表示名を整える (前後の空白を除く)。空や長すぎる名前はエラー
+fn normalize_name(name: &str) -> ApiResult<&str> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(ApiError::BadRequest("表示名を入力してください".into()));
+    }
+    if name.chars().count() > MAX_NAME {
+        return Err(ApiError::BadRequest(format!("表示名は{MAX_NAME}文字以内にしてください")));
+    }
+    Ok(name)
+}
+
+/// 自分の表示名を変える。名前は表示のたびに users から引くので、過去の稟議やコメントにも反映される
+pub async fn update_me(
+    State(state): State<AppState>,
+    AuthUser(me): AuthUser,
+    Json(input): Json<MeUpdate>,
+) -> ApiResult<Json<MeResp>> {
+    let name = normalize_name(&input.name)?;
+    sqlx::query("UPDATE users SET name = $1 WHERE id = $2")
+        .bind(name)
+        .bind(me.id)
+        .execute(&state.db)
+        .await?;
+    let member = load_member(&state, me.id).await?.ok_or(ApiError::NotFound)?;
+    Ok(Json(me_resp(&state, member).await?))
 }
 
 /// 初回オンボーディングを見終えたことを記録する
@@ -152,4 +187,26 @@ pub async fn complete_onboarding(
         .execute(&state.db)
         .await?;
     Ok(Json(serde_json::json!({ "onboarded": true })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn name_is_trimmed() {
+        assert_eq!(normalize_name("  ママ \n").unwrap(), "ママ");
+    }
+
+    #[test]
+    fn empty_name_is_rejected() {
+        assert!(normalize_name("").is_err());
+        assert!(normalize_name("   ").is_err());
+    }
+
+    #[test]
+    fn name_length_is_counted_in_chars() {
+        assert!(normalize_name(&"あ".repeat(MAX_NAME)).is_ok());
+        assert!(normalize_name(&"あ".repeat(MAX_NAME + 1)).is_err());
+    }
 }

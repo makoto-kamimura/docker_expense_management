@@ -215,6 +215,18 @@ export async function deleteAttachmentAction(requestId: string, attachmentId: st
 // Family Settings
 // ---------------------------------------------------------------------------
 
+/** 自分の表示名を変える (ヘッダーや稟議の名前も変わるので layout ごと再検証する) */
+export async function updateMyNameAction(formData: FormData): Promise<Result> {
+  const r = await attempt(() =>
+    apiFetch('/me', {
+      method: 'PUT',
+      body: JSON.stringify({ name: String(formData.get('name') ?? '') }),
+    }),
+  );
+  revalidatePath('/', 'layout');
+  return r;
+}
+
 export async function updateFamilyNameAction(formData: FormData) {
   await apiFetch('/family', {
     method: 'PUT',
