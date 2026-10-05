@@ -139,6 +139,8 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 | 承認 | Approve | レビュアーが問題ないと判断すること |
 | 却下 | Reject | レビュアーが認めないと判断すること（稟議はクローズになる） |
 | 取り下げ | Close | 申請者が稟議をやめること |
+| 再オープン | Reopen | クローズした稟議や、承認したらしてほしいことが済んでいない稟議を、レビュー待ちに戻すこと |
+| 承認したらしてほしいこと | Approval Tasks | 申請者がレビュアーに、承認するときにお願いしたいこと（例：カレンダーに予定を入れる） |
 | マージ | Merge | 承認された稟議を確定すること。グループが購入に合意したことを表す |
 | 購入済み | Purchased | 実際に購入したこと（外出・イベント型は「行ってきた」、提案型は「やった」） |
 | 分岐 | Branch | 既存の稟議から派生させた稟議 |
@@ -177,6 +179,7 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 | 購入済みにする | 申請者 | マージ済み |
 | 取り下げ | 申請者 | 申請済み・レビュー中・修正依頼・承認済み・マージ済み |
 | 再オープン | 申請者・レビュアー | クローズ |
+| 再オープン（お願いが済んでいない） | 申請者（「承認したらしてほしいこと」があるときだけ。コメント必須） | 承認済み・マージ済み |
 | 削除 | 申請者・管理者（他人の下書きは見えないので消せない） | すべて（完了した稟議を消すと、支出の集計からも消える） |
 | コメント | グループのメンバー（下書きは申請者のみ） | すべて |
 | 資料の添付 | 申請者 | 完了以外 |
@@ -208,7 +211,7 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 
 ### 4.4 マージして購入する
 
-1. 承認された稟議を、申請者かレビュアーがマージする。
+1. 承認された稟議を、申請者かレビュアーがマージする。「承認したらしてほしいこと」が済んでいなければ、申請者が再オープンしてレビューに戻せる。
 2. 申請者が購入し、実際の金額・購入日・注文番号・レシートを登録して購入済みにする。
 
 ### 4.5 家事をコミットする
@@ -321,6 +324,7 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 | 予定日（行く日）/ 帰る日 | | 帰る日は外出・イベント型のみ |
 | ラベル | | 複数選べる |
 | 比較する商品 | | 名前・金額・URL・メモ。20件まで。比較表で表示する |
+| 承認したらしてほしいこと | | レビュアーに、承認するときにお願いしたいこと（例：家族のカレンダーに予定を入れる・カードで決済しておく）。理由と同じく Markdown で書ける。承認のダイアログ・詳細画面・マージボックス・まとめ資料に表示する（[9.5節](#95-承認)） |
 | メモ | | |
 | 資料 | | [8.7節](#87-資料とレシート) |
 | レビュアー | 申請に必須 | 1人以上 |
@@ -351,7 +355,7 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 #### 複製
 
 - 稟議を作る権限がある人は、見える稟議をどの状態からでも複製して、新しい下書きを作れる（詳細画面の「複製」）。編集できる状態（下書き・修正依頼）は変えず、終わった稟議の内容を流用したいときに使う。
-- 複製する項目: 種類・タイトル（末尾に「（複製）」を付ける）・金額・購入先・商品名・商品URL・予定日・帰る日・理由・メモ・ラベル・比較する商品・レビュアー（自分は除く）。元の種類が非表示なら、同じ型の最初の表示中の種類にする。
+- 複製する項目: 種類・タイトル（末尾に「（複製）」を付ける）・金額・購入先・商品名・商品URL・予定日・帰る日・理由・承認したらしてほしいこと・メモ・ラベル・比較する商品・レビュアー（自分は除く）。元の種類が非表示なら、同じ型の最初の表示中の種類にする。
 - 複製しないもの: 状態（新しい下書きになる）・コメント・添付・履歴・購入の記録・分岐のつながり。
 - 保存するまでは何も作られない（フォームに初期値が入るだけ）。
 
@@ -413,6 +417,8 @@ stateDiagram-v2
   Approved --> Closed: 却下・取り下げ
   Merged --> Closed: 取り下げ
   Closed --> Submitted: 再オープン
+  Approved --> Submitted: 再オープン（お願いが済んでいない）
+  Merged --> Submitted: 再オープン（お願いが済んでいない）
 ```
 
 ### 9.2 レビューの画面
@@ -447,13 +453,15 @@ stateDiagram-v2
 
 ### 9.5 承認
 
-- レビュアーが「承認」を押すと、確認のダイアログ（金額を表示）を出してから承認する。
+- レビュアーが「承認」を押すと、確認のダイアログ（金額と、あれば「承認したらしてほしいこと」を表示）を出してから承認する。
+- 承認済み・マージ済みの間も、マージボックスに「承認したらしてほしいこと」を表示する。
 - レビュアーのうち1人が承認すると、稟議は承認済みになる（全員の承認を必須にするルールは[未決事項 Q1](#24-未決事項)）。
 
 ### 9.6 却下・取り下げ・再オープン
 
 - 却下（レビュアー）と取り下げ（申請者）で、稟議はクローズになる。理由をコメントに残せる。
 - クローズした稟議は、申請者かレビュアーが再オープンして、レビュー待ち（申請済み）に戻せる。レビュアーの判定と承認日時はリセットする。
+- 承認＝稟議の成立だが、「承認したらしてほしいこと」が済んでいないときは、申請者が承認済み・マージ済みの稟議を再オープンして、レビュー待ちに戻せる。済んでいないことのコメントが必須で、レビュアーの判定・承認日時・マージの記録（誰がいつ）をリセットする。購入済みの稟議は戻せない。「承認したらしてほしいこと」を書いていない稟議は、承認後は取り下げだけができる。
 
 ## 10. マージと購入
 
@@ -488,7 +496,7 @@ stateDiagram-v2
 | コメント | ママ「今のカメラでは何が足りないの？」 |
 | レビュー | ママが修正を依頼しました / 承認しました / 却下しました |
 | マージ・購入 | ママがマージしました / パパが購入済みにしました |
-| クローズ・再オープン | |
+| クローズ・再オープン | パパが申請を取り下げました / パパが、承認したらしてほしいことが済んでいないため再オープンしました |
 | 添付・ラベル・分岐 | ラベル「急ぎ」を付けました |
 
 - 詳細画面の「会話」タブでは、コメントとアクティビティを時系列で表示する。
@@ -805,7 +813,7 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 | `families` | グループ | `name`・`invite_code`（一意）・`currency`（既定 JPY）・`labels_seeded`・`category_labels_migrated` |
 | `users` | ユーザー | `email`（一意）・`password_hash`・`name`・`avatar_url`・`onboarded_at` |
 | `family_members` | グループへの所属と権限 | `family_id`・`user_id`（一意。1人1グループ）・`can_request`・`can_review`・`is_admin` |
-| `purchase_requests` | 稟議 | `kind`（purchase / outing / activity）・`status`・`title`・`reason`・`price`・`currency`・`seller`・`product_name`・`product_url`・`planned_date`・`end_date`・`notes`・`parent_id`（分岐元）・`submitted_at`・`approved_at`・`merged_at`・`merged_by`・`purchased_at`・`purchase_date`・`actual_price`・`order_number`・`final_product_url`・`closed_at`・`close_reason`（rejected / withdrawn）・`category`（使っていない） |
+| `purchase_requests` | 稟議 | `kind`（purchase / outing / activity）・`status`・`title`・`reason`・`price`・`currency`・`seller`・`product_name`・`product_url`・`planned_date`・`end_date`・`notes`・`approval_tasks`（承認したらしてほしいこと）・`parent_id`（分岐元）・`submitted_at`・`approved_at`・`merged_at`・`merged_by`・`purchased_at`・`purchase_date`・`actual_price`・`order_number`・`final_product_url`・`closed_at`・`close_reason`（rejected / withdrawn）・`category`（使っていない） |
 | `request_reviewers` | 稟議のレビュアーと判定 | `(request_id, user_id)`・`decision`（pending / approved / changes_requested / rejected）・`decided_at` |
 | `alternative_products` | 比較する商品 | `request_id`・`position`・`name`・`price`・`url`・`notes` |
 | `attachments` | 資料・レシート | `request_id`・`kind`（evidence / receipt）・`file_name`・`content_type`・`byte_size`・`storage_key`・`uploaded_by` |
@@ -864,7 +872,7 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 | POST | `/requests/:id/merge` | マージ |
 | POST | `/requests/:id/purchase` | 購入済みにする |
 | POST | `/requests/:id/close` | 取り下げ |
-| POST | `/requests/:id/reopen` | 再オープン |
+| POST | `/requests/:id/reopen` | 再オープン（クローズから。承認済み・マージ済みからは「承認したらしてほしいこと」が済んでいないとき、申請者がコメント必須で） |
 | POST | `/requests/:id/comments` | コメント |
 | PUT | `/requests/:id/labels` | ラベルの付け外し |
 

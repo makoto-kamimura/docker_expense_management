@@ -29,6 +29,7 @@ export interface RequestDraft {
   planned_date?: string | null;
   end_date?: string | null;
   notes?: string | null;
+  approval_tasks?: string | null;
   reviewer_ids?: string[];
   alternatives?: AlternativeDraft[];
 }
@@ -65,9 +66,9 @@ export default function RequestForm({
   const [reviewers, setReviewers] = useState<string[]>(defaults?.reviewer_ids ?? []);
   const [typeId, setTypeId] = useState<string>(defaults?.type_id ?? types[0]?.id ?? '');
   const [labelIds, setLabelIds] = useState<string[]>(defaults?.label_ids ?? []);
-  // 理由は Markdown で書ける。「書く / プレビュー」を切り替える (入力欄は隠すだけなので、値はフォームで送られる)
+  // 理由と「承認したらしてほしいこと」は Markdown で書ける
   const [reasonText, setReasonText] = useState(defaults?.reason ?? '');
-  const [reasonPreview, setReasonPreview] = useState(false);
+  const [tasksText, setTasksText] = useState(defaults?.approval_tasks ?? '');
   const type = types.find((x) => x.id === typeId) ?? types[0];
   // 入力項目や完了の表現は、種類の型で決まる
   const kind = type?.base ?? 'purchase';
@@ -214,39 +215,16 @@ export default function RequestForm({
         </div>
       </div>
 
-      <div className="box">
-        <div className="box-head">
-          <h2>{t.reason}<span className="req">*</span></h2>
-          <nav className="md-tabs" aria-label={`${t.reason}の表示`}>
-            <button type="button" className={reasonPreview ? '' : 'on'} aria-pressed={!reasonPreview} onClick={() => setReasonPreview(false)}>書く</button>
-            <button type="button" className={reasonPreview ? 'on' : ''} aria-pressed={reasonPreview} onClick={() => setReasonPreview(true)}>プレビュー</button>
-          </nav>
-        </div>
-        <div className="box-body">
-          <div className="row" style={{ marginBottom: 8 }}>
-            <label htmlFor="reason" className="sr-only">{t.reason}</label>
-            <textarea
-              id="reason"
-              name="reason"
-              rows={6}
-              value={reasonText}
-              onChange={(e) => setReasonText(e.target.value)}
-              placeholder={t.reasonPlaceholder}
-              hidden={reasonPreview}
-            />
-            {reasonPreview && (
-              <div className="md-preview">
-                {reasonText.trim() ? <Markdown>{reasonText}</Markdown> : <span className="muted">プレビューする内容がありません。</span>}
-              </div>
-            )}
-          </div>
-          <p className="muted small">
-            {t.reasonHint}
-            <br />
-            Markdown が使えます（見出し <code>## </code>・箇条書き <code>- </code>・太字 <code>**太字**</code>・リンク <code>[文字](https://…)</code> など）。
-          </p>
-        </div>
-      </div>
+      <MarkdownField
+        name="reason"
+        label={t.reason}
+        heading={<>{t.reason}<span className="req">*</span></>}
+        rows={6}
+        value={reasonText}
+        onChange={setReasonText}
+        placeholder={t.reasonPlaceholder}
+        hint={t.reasonHint}
+      />
 
       <div className="box">
         <div className="box-head">
@@ -305,6 +283,17 @@ export default function RequestForm({
         </div>
       </div>
 
+      <MarkdownField
+        name="approval_tasks"
+        label="承認したらしてほしいこと"
+        heading={<>承認したらしてほしいこと <span className="ja">任意</span></>}
+        rows={3}
+        value={tasksText}
+        onChange={setTasksText}
+        placeholder="例: 承認したら、家族のカレンダーに予定を入れてください"
+        hint="レビュアーにお願いしたいことを書くと、承認するときに表示されます。承認されたあとで済んでいなければ、稟議を再オープンしてもう一度レビューしてもらえます。"
+      />
+
       <div className="box">
         <div className="box-head"><h2>メモ <span className="ja">任意</span></h2></div>
         <div className="box-body">
@@ -325,5 +314,63 @@ export default function RequestForm({
         )}
       </div>
     </form>
+  );
+}
+
+/** Markdown で書ける入力欄。「書く / プレビュー」を切り替える (入力欄は隠すだけなので、値はフォームで送られる) */
+function MarkdownField({
+  name,
+  label,
+  heading,
+  rows,
+  value,
+  onChange,
+  placeholder,
+  hint,
+}: {
+  name: string;
+  label: string;
+  heading: React.ReactNode;
+  rows: number;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  hint: React.ReactNode;
+}) {
+  const [preview, setPreview] = useState(false);
+  return (
+    <div className="box">
+      <div className="box-head">
+        <h2>{heading}</h2>
+        <nav className="md-tabs" aria-label={`${label}の表示`}>
+          <button type="button" className={preview ? '' : 'on'} aria-pressed={!preview} onClick={() => setPreview(false)}>書く</button>
+          <button type="button" className={preview ? 'on' : ''} aria-pressed={preview} onClick={() => setPreview(true)}>プレビュー</button>
+        </nav>
+      </div>
+      <div className="box-body">
+        <div className="row" style={{ marginBottom: 8 }}>
+          <label htmlFor={name} className="sr-only">{label}</label>
+          <textarea
+            id={name}
+            name={name}
+            rows={rows}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            hidden={preview}
+          />
+          {preview && (
+            <div className="md-preview">
+              {value.trim() ? <Markdown>{value}</Markdown> : <span className="muted">プレビューする内容がありません。</span>}
+            </div>
+          )}
+        </div>
+        <p className="muted small">
+          {hint}
+          <br />
+          Markdown が使えます（見出し <code>## </code>・箇条書き <code>- </code>・太字 <code>**太字**</code>・リンク <code>[文字](https://…)</code> など）。
+        </p>
+      </div>
+    </div>
   );
 }

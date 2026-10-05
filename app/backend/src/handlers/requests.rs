@@ -59,6 +59,7 @@ pub fn permissions(me: &Member, r: &PurchaseRequest, reviewers: &[Reviewer]) -> 
     let is_requester = r.requester_id == me.id;
     let is_reviewer = reviewers.iter().any(|x| x.id == me.id);
     let s = r.status;
+    let has_approval_tasks = r.approval_tasks.as_deref().is_some_and(|t| !t.trim().is_empty());
     Permissions {
         can_edit: is_requester && s.is_editable(),
         can_submit: is_requester && s.is_editable() && !reviewers.is_empty(),
@@ -73,7 +74,9 @@ pub fn permissions(me: &Member, r: &PurchaseRequest, reviewers: &[Reviewer]) -> 
         can_comment: s != Draft || is_requester,
         can_upload_evidence: is_requester && !s.is_finished(),
         can_upload_receipt: is_requester && matches!(s, Merged | Purchased),
-        can_reopen: (is_requester || is_reviewer) && s == Closed,
+        // クローズ (却下・取り下げ) は当事者が戻せる。承認後は、お願いが済んでいないときに申請者だけが戻せる
+        can_reopen: ((is_requester || is_reviewer) && s == Closed)
+            || (is_requester && matches!(s, Approved | Merged) && has_approval_tasks),
         can_label: is_requester || is_reviewer,
     }
 }
@@ -396,8 +399,8 @@ pub async fn create(
     let (id,): (Uuid,) = sqlx::query_as(
         "INSERT INTO purchase_requests
             (family_id, requester_id, title, reason, price, currency, seller, product_name,
-             product_url, category, planned_date, notes, kind, end_date, parent_id, type_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id",
+             product_url, category, planned_date, notes, kind, end_date, parent_id, type_id, approval_tasks)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id",
     )
     .bind(me.family_id)
     .bind(me.id)
@@ -415,6 +418,7 @@ pub async fn create(
     .bind(input.end_date)
     .bind(parent.as_ref().map(|p| p.id))
     .bind(type_id)
+    .bind(clean(&input.approval_tasks))
     .fetch_one(&mut *tx)
     .await?;
     replace_reviewers(&mut tx, &me, id, &input.reviewer_ids).await?;
@@ -473,6 +477,7 @@ pub async fn update(
     diff("purchase date", json!(old.planned_date), json!(input.planned_date));
     diff("end date", json!(old.end_date), json!(input.end_date));
     diff("notes", json!(old.notes), json!(clean(&input.notes)));
+    diff("approval tasks", json!(old.approval_tasks), json!(clean(&input.approval_tasks)));
 
     let mut old_ids: Vec<Uuid> = reviewers.iter().map(|r| r.id).collect();
     let mut new_ids = input.reviewer_ids.clone();
@@ -517,8 +522,8 @@ pub async fn update(
         "UPDATE purchase_requests
             SET title = $1, reason = $2, price = $3, seller = $4, product_name = $5,
                 product_url = $6, category = COALESCE($7, category), planned_date = $8, notes = $9,
-                kind = $10, end_date = $11, type_id = $12
-          WHERE id = $13",
+                kind = $10, end_date = $11, type_id = $12, approval_tasks = $13
+          WHERE id = $14",
     )
     .bind(input.title.trim())
     .bind(input.reason.trim())
@@ -532,6 +537,7 @@ pub async fn update(
     .bind(input.kind)
     .bind(input.end_date)
     .bind(type_id)
+    .bind(clean(&input.approval_tasks))
     .bind(id)
     .execute(&mut *tx)
     .await?;
@@ -834,6 +840,7 @@ pub async fn close(
 }
 
 /// Closed → Submitted (却下・取り下げた稟議をもう一度レビューに戻す)
+/// Approved / Merged → Submitted (承認したらしてほしいことが済んでいないので、申請者が戻す。コメント必須)
 pub async fn reopen(
     State(state): State<AppState>,
     AuthUser(me): AuthUser,
@@ -850,11 +857,19 @@ pub async fn reopen(
         return Err(ApiError::Conflict("レビュアーがいないため再オープンできません".into()));
     }
     let comment = input.and_then(|j| clean(&j.0.comment));
+    let meta = if req.status == RequestStatus::Closed {
+        json!({ "previous_reason": req.close_reason })
+    } else {
+        if comment.is_none() {
+            return Err(ApiError::BadRequest("済んでいないことをコメントに書いてください".into()));
+        }
+        json!({ "previous_status": req.status, "reason": "approval_tasks_not_done" })
+    };
     let mut tx = state.db.begin().await?;
     sqlx::query(
         "UPDATE purchase_requests
             SET status = 'submitted', submitted_at = now(), approved_at = NULL,
-                closed_at = NULL, close_reason = NULL
+                merged_at = NULL, merged_by = NULL, closed_at = NULL, close_reason = NULL
           WHERE id = $1",
     )
     .bind(id)
@@ -865,7 +880,7 @@ pub async fn reopen(
         .bind(id)
         .execute(&mut *tx)
         .await?;
-    log_activity(&mut *tx, id, me.id, "reopened", json!({ "previous_reason": req.close_reason })).await?;
+    log_activity(&mut *tx, id, me.id, "reopened", meta).await?;
     if let Some(body) = &comment {
         add_comment(&mut tx, id, me.id, body).await?;
     }
@@ -1004,7 +1019,10 @@ fn validate_input(input: &RequestInput) -> ApiResult<()> {
     if !(0..=MAX_PRICE).contains(&input.price) {
         return Err(ApiError::BadRequest("金額が正しくありません".into()));
     }
-    if input.reason.len() > MAX_TEXT || input.notes.as_deref().map_or(0, str::len) > MAX_TEXT {
+    if input.reason.len() > MAX_TEXT
+        || input.notes.as_deref().map_or(0, str::len) > MAX_TEXT
+        || input.approval_tasks.as_deref().map_or(0, str::len) > MAX_TEXT
+    {
         return Err(ApiError::BadRequest("文章が長すぎます".into()));
     }
     if let Some(url) = clean(&input.product_url) {
@@ -1069,6 +1087,7 @@ mod tests {
             planned_date: None,
             end_date: None,
             notes: None,
+            approval_tasks: None,
             status,
             submitted_at: None,
             approved_at: None,
@@ -1109,5 +1128,46 @@ mod tests {
     fn other_member_cannot_delete() {
         let me = member(false);
         assert!(!permissions(&me, &request(Uuid::new_v4(), RequestStatus::Merged), &[]).can_delete);
+    }
+
+    fn reviewer_of(m: &Member) -> Reviewer {
+        Reviewer { id: m.id, name: String::new(), avatar_url: None, decision: ReviewerDecision::Approved, decided_at: None }
+    }
+
+    fn with_tasks(requester_id: Uuid, status: RequestStatus, tasks: Option<&str>) -> PurchaseRequest {
+        PurchaseRequest { approval_tasks: tasks.map(str::to_string), ..request(requester_id, status) }
+    }
+
+    #[test]
+    fn requester_can_reopen_approved_or_merged_when_tasks_are_written() {
+        let me = member(false);
+        let reviewer = member(false);
+        let reviewers = [reviewer_of(&reviewer)];
+        for st in [RequestStatus::Approved, RequestStatus::Merged] {
+            let r = with_tasks(me.id, st, Some("カレンダーに予定を入れてください"));
+            assert!(permissions(&me, &r, &reviewers).can_reopen, "{st:?}");
+            // 承認後の再オープンは申請者だけ
+            assert!(!permissions(&reviewer, &r, &reviewers).can_reopen, "{st:?}");
+        }
+    }
+
+    #[test]
+    fn cannot_reopen_after_approval_without_tasks_or_after_purchase() {
+        let me = member(false);
+        for tasks in [None, Some("  ")] {
+            assert!(!permissions(&me, &with_tasks(me.id, RequestStatus::Approved, tasks), &[]).can_reopen);
+        }
+        let purchased = with_tasks(me.id, RequestStatus::Purchased, Some("お願い"));
+        assert!(!permissions(&me, &purchased, &[]).can_reopen);
+    }
+
+    #[test]
+    fn requester_and_reviewer_can_reopen_closed() {
+        let me = member(false);
+        let reviewer = member(false);
+        let reviewers = [reviewer_of(&reviewer)];
+        let r = request(me.id, RequestStatus::Closed);
+        assert!(permissions(&me, &r, &reviewers).can_reopen);
+        assert!(permissions(&reviewer, &r, &reviewers).can_reopen);
     }
 }

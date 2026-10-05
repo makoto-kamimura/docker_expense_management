@@ -36,6 +36,7 @@ export interface RequestPayload {
   planned_date: string | null;
   end_date: string | null;
   notes: string | null;
+  approval_tasks: string | null;
   reviewer_ids: string[];
   alternatives: { name: string; price: number | null; url: string | null; notes: string | null }[];
 }
@@ -107,6 +108,9 @@ export default function RequestForm({
   // 理由は Markdown で書ける。プレビューに切り替えて整った表示を確かめられる
   const [reasonPreview, setReasonPreview] = useState(false);
   const [notes, setNotes] = useState(r?.notes ?? '');
+  // 承認したらしてほしいこと (理由と同じく Markdown)
+  const [tasks, setTasks] = useState(r?.approval_tasks ?? '');
+  const [tasksPreview, setTasksPreview] = useState(false);
   const [reviewers, setReviewers] = useState<string[]>(initial?.reviewers.map((x) => x.id) ?? []);
   const [alts, setAlts] = useState<AltDraft[]>(
     initial?.alternatives.map((a) => ({
@@ -151,6 +155,7 @@ export default function RequestForm({
           planned_date: opt(plannedDate),
           end_date: t.hasEndDate ? opt(endDate) : null,
           notes: opt(notes),
+          approval_tasks: opt(tasks),
           reviewer_ids: reviewers,
           alternatives: alts
             .filter((a) => a.name.trim())
@@ -284,6 +289,29 @@ export default function RequestForm({
             })}
           </View>
         )}
+      </Card>
+
+      <Card
+        title="承認したらしてほしいこと"
+        ja="任意"
+        right={<Text style={s.link} onPress={() => setTasksPreview((p) => !p)}>{tasksPreview ? '書く' : 'プレビュー'}</Text>}
+      >
+        {tasksPreview ? (
+          <View style={{ minHeight: 80 }}>
+            {tasks.trim() ? <Markdown>{tasks}</Markdown> : <Text style={s.muted}>プレビューする内容がありません。</Text>}
+          </View>
+        ) : (
+          <TextInput
+            style={[s.input, s.multi]}
+            multiline
+            value={tasks}
+            onChangeText={setTasks}
+            placeholder="例: 承認したら、家族のカレンダーに予定を入れてください"
+          />
+        )}
+        <Text style={[s.muted, { marginTop: 6, fontSize: 12 }]}>
+          レビュアーにお願いしたいことを書くと、承認するときに表示されます。承認されたあとで済んでいなければ、再オープンしてもう一度レビューしてもらえます。
+        </Text>
       </Card>
 
       <Card title="メモ" ja="任意">

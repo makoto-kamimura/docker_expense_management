@@ -118,6 +118,7 @@ function requestPayload(formData: FormData) {
     // 帰る日はお出かけのときだけ
     end_date: text('kind') === 'outing' ? opt('end_date') : null,
     notes: opt('notes'),
+    approval_tasks: opt('approval_tasks'),
     reviewer_ids: formData.getAll('reviewer_ids').map(String),
     label_ids: formData.getAll('label_ids').map(String),
     alternatives,

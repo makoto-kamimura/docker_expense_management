@@ -5,6 +5,7 @@ import { requestActionAction } from '@/lib/actions';
 import { money } from '@/lib/format';
 import { KIND_TEXT, type RequestDetail } from '@/lib/types';
 import ConfirmButton from './ConfirmButton';
+import Markdown from './Markdown';
 import Octicon, { type IconName } from './Octicon';
 
 type Action = 'submit' | 'approve' | 'request-changes' | 'reject' | 'merge' | 'close' | 'reopen';
@@ -31,6 +32,43 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
     });
 
   const errorBox = error && <div className="error" role="alert">{error}</div>;
+
+  // 承認したらしてほしいこと。承認後は、済んでいなければ申請者が再オープンできる
+  const tasksNote = r.approval_tasks && (
+    <div className="tasks-note"><Markdown>{r.approval_tasks}</Markdown></div>
+  );
+  const tasksFollowUp = r.approval_tasks && (
+    <div>
+      <p className="muted" style={{ margin: 0 }}>
+        {isRequester ? 'レビュアーへのお願い (承認したらしてほしいこと)' : `${detail.requester.name} からのお願い (承認したらしてほしいこと)`}
+      </p>
+      {tasksNote}
+      {p.can_reopen && (
+        <>
+          <p className="muted">お願いしたことが済んでいなければ、再オープンしてもう一度レビューしてもらえます。</p>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            aria-label="済んでいないこと"
+            placeholder="済んでいないこと (必須)"
+          />
+          <div className="actions" style={{ marginTop: 8 }}>
+            <ConfirmButton
+              label="お願いが済んでいないので再オープン"
+              title="この稟議を再オープンしますか？"
+              confirmLabel="再オープンする"
+              confirmClassName="btn-primary"
+              disabled={pending || !comment.trim()}
+              onConfirm={() => run('reopen', true)}
+            >
+              <p>承認したらしてほしいことが済んでいないため、レビュー待ちに戻してもう一度レビューしてもらいます。</p>
+              <p className="muted">レビュアーの判定・承認・マージの記録はリセットされます。</p>
+            </ConfirmButton>
+          </div>
+        </>
+      )}
+    </div>
+  );
 
   // ---- Draft ----
   if (r.status === 'draft') {
@@ -76,6 +114,12 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
               <p>{t.thing}の稟議を承認します。</p>
               <p className="muted" style={{ margin: 0 }}>{t.priceShort}</p>
               <p style={{ fontSize: 24, fontWeight: 600 }}>{price}</p>
+              {r.approval_tasks && (
+                <>
+                  <p className="muted" style={{ margin: 0 }}>承認したら、次のことをお願いされています。</p>
+                  {tasksNote}
+                </>
+              )}
             </ConfirmButton>
             <RejectButton pending={pending} onReject={() => run('reject', true)} />
           </div>
@@ -111,7 +155,9 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
     const approvers = reviewers.filter((x) => x.decision === 'approved').map((x) => x.name).join('、');
     return (
       <>
-        <Panel icon="check" color="green" title={`${approvers || 'メンバー'} が承認しました`} sub="レビューが完了しました。" />
+        <Panel icon="check" color="green" title={`${approvers || 'メンバー'} が承認しました`} sub="レビューが完了しました。">
+          {tasksFollowUp}
+        </Panel>
         <Panel icon="merge" color="purple" title="マージできます" sub={t.mergeSub}>
           {errorBox}
           <p className="muted">
@@ -155,6 +201,7 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
           )}
           {p.can_close && <WithdrawButton pending={pending} onWithdraw={() => run('close')} />}
         </div>
+        {tasksFollowUp && <div style={{ marginTop: 12 }}>{tasksFollowUp}</div>}
       </Panel>
     );
   }

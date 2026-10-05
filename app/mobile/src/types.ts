@@ -85,6 +85,8 @@ export interface PurchaseRequest {
   /** お出かけの帰る日 */
   end_date: string | null;
   notes: string | null;
+  /** 承認したらしてほしいこと (Markdown) */
+  approval_tasks: string | null;
   status: RequestStatus;
   submitted_at: string | null;
   approved_at: string | null;
