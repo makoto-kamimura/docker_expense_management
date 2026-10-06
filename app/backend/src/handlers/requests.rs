@@ -21,7 +21,9 @@ use crate::{
 
 const MAX_PRICE: i64 = 1_000_000_000_000;
 const MAX_ALTERNATIVES: usize = 20;
-const MAX_TEXT: usize = 10_000;
+/// 理由・メモ・承認後のタスク・コメントの上限 (文字数。日本語は 1 文字 3 バイトなのでバイト数では数えない)
+const MAX_TEXT: usize = 20_000;
+const MAX_TITLE: usize = 200;
 
 // ---------------------------------------------------------------------------
 // 共通
@@ -900,9 +902,10 @@ pub async fn comment(
         return Err(ApiError::Forbidden);
     }
     let body = input.body.trim();
-    if body.is_empty() || body.len() > MAX_TEXT {
+    if body.is_empty() {
         return Err(ApiError::BadRequest("コメントを入力してください".into()));
     }
+    check_text_len(body, "コメント")?;
     let mut tx = state.db.begin().await?;
     // Reviewer がコメントしたら「確認中」に進める
     if req.status == RequestStatus::Submitted && reviewers.iter().any(|r| r.id == me.id) {
@@ -1012,18 +1015,48 @@ fn validate_url(url: &str, label: &str) -> ApiResult<()> {
     }
 }
 
+/// 文章の長さを文字数で確かめる。超えたら項目名・上限・今の文字数をエラーに出す
+fn check_text_len(value: &str, label: &str) -> ApiResult<()> {
+    let count = value.chars().count();
+    if count > MAX_TEXT {
+        return Err(ApiError::BadRequest(format!(
+            "{label}は{}文字までです (今は{}文字)",
+            group_digits(MAX_TEXT),
+            group_digits(count)
+        )));
+    }
+    Ok(())
+}
+
+/// 20000 → "20,000"
+fn group_digits(n: usize) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
 fn validate_input(input: &RequestInput) -> ApiResult<()> {
-    if input.title.trim().is_empty() || input.title.len() > 200 {
+    if input.title.trim().is_empty() {
         return Err(ApiError::BadRequest("タイトルを入力してください".into()));
+    }
+    if input.title.chars().count() > MAX_TITLE {
+        return Err(ApiError::BadRequest(format!("タイトルは{MAX_TITLE}文字までです")));
     }
     if !(0..=MAX_PRICE).contains(&input.price) {
         return Err(ApiError::BadRequest("金額が正しくありません".into()));
     }
-    if input.reason.len() > MAX_TEXT
-        || input.notes.as_deref().map_or(0, str::len) > MAX_TEXT
-        || input.approval_tasks.as_deref().map_or(0, str::len) > MAX_TEXT
-    {
-        return Err(ApiError::BadRequest("文章が長すぎます".into()));
+    check_text_len(&input.reason, "理由")?;
+    if let Some(notes) = &input.notes {
+        check_text_len(notes, "メモ")?;
+    }
+    if let Some(tasks) = &input.approval_tasks {
+        check_text_len(tasks, "承認したらしてほしいこと")?;
     }
     if let Some(url) = clean(&input.product_url) {
         validate_url(&url, "URL")?;
@@ -1169,5 +1202,42 @@ mod tests {
         let r = request(me.id, RequestStatus::Closed);
         assert!(permissions(&me, &r, &reviewers).can_reopen);
         assert!(permissions(&reviewer, &r, &reviewers).can_reopen);
+    }
+
+    fn input(title: &str, reason: &str) -> RequestInput {
+        serde_json::from_value(serde_json::json!({ "title": title, "reason": reason, "price": 1000 })).unwrap()
+    }
+
+    fn error_message(r: ApiResult<()>) -> String {
+        match r {
+            Err(ApiError::BadRequest(m)) => m,
+            other => panic!("BadRequest のはず: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn long_japanese_reason_is_counted_by_characters() {
+        // 10,000 文字 = 30,000 バイト。以前のバイト数の上限 (10,000) では弾かれていた
+        assert!(validate_input(&input("ジムニー", &"あ".repeat(10_000))).is_ok());
+        assert!(validate_input(&input("ジムニー", &"あ".repeat(MAX_TEXT))).is_ok());
+        let msg = error_message(validate_input(&input("ジムニー", &"あ".repeat(MAX_TEXT + 1))));
+        assert!(msg.contains("理由") && msg.contains("20,000") && msg.contains("20,001"), "{msg}");
+    }
+
+    #[test]
+    fn japanese_title_is_counted_by_characters() {
+        assert!(validate_input(&input(&"あ".repeat(MAX_TITLE), "")).is_ok());
+        let msg = error_message(validate_input(&input(&"あ".repeat(MAX_TITLE + 1), "")));
+        assert!(msg.contains("200文字"), "{msg}");
+        let msg = error_message(validate_input(&input("  ", "")));
+        assert!(msg.contains("入力してください"), "{msg}");
+    }
+
+    #[test]
+    fn group_digits_inserts_commas() {
+        assert_eq!(group_digits(0), "0");
+        assert_eq!(group_digits(999), "999");
+        assert_eq!(group_digits(20_000), "20,000");
+        assert_eq!(group_digits(1_234_567), "1,234,567");
     }
 }
