@@ -255,7 +255,7 @@ export const STATUS_LABEL: Record<RequestStatus, string> = {
   draft: '下書き',
   submitted: 'レビュー待ち',
   under_review: 'レビュー中',
-  changes_needed: '修正依頼あり',
+  changes_needed: '再確認の依頼あり',
   approved: '承認済み',
   merged: 'マージ済み',
   purchased: '購入済み',
@@ -267,7 +267,7 @@ export const STATUS_HINT: Record<RequestStatus, string> = {
   draft: 'グループにはまだ見えていません',
   submitted: 'グループのレビューを待っています',
   under_review: 'グループが確認しています',
-  changes_needed: '追加情報・修正が必要です',
+  changes_needed: '追加情報・内容の再確認が必要です',
   approved: 'マージすると稟議成立です',
   merged: '稟議が成立しました。購入できます',
   purchased: '完了しました',
@@ -507,7 +507,7 @@ export function statusLabel(kind: RequestKind, status: RequestStatus): string {
 export const DECISION_LABEL: Record<ReviewerDecision, string> = {
   pending: '未レビュー',
   approved: '承認',
-  changes_requested: '修正依頼',
+  changes_requested: '再確認の依頼',
   rejected: '却下',
 };
 
