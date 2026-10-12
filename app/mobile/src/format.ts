@@ -286,3 +286,27 @@ export function choreTimeTotalLabel(chores: Chore[], tab: ChorePeriodTab): strin
   return `合計 ⏱ ${durationLabel(t.once)}${per}${missing}`;
 }
 
+
+// URL に使える ASCII の文字だけを拾う (「https://example.com。」の句読点を含めない)
+const URL_RE = /https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g;
+
+/** 文章を、ただの文字と URL に分ける (コメントの URL をリンクにするため) */
+export function splitUrls(text: string): { text: string; url?: string }[] {
+  const parts: { text: string; url?: string }[] = [];
+  let last = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    let url = m[0];
+    // 文末の句読点と、対応の取れない閉じかっこは URL に含めない
+    for (;;) {
+      if (/[.,;:!?'"]$/.test(url)) url = url.slice(0, -1);
+      else if (url.endsWith(')') && url.split('(').length < url.split(')').length) url = url.slice(0, -1);
+      else break;
+    }
+    const start = m.index ?? 0;
+    if (start > last) parts.push({ text: text.slice(last, start) });
+    parts.push({ text: url, url });
+    last = start + url.length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+  return parts;
+}

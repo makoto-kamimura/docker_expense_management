@@ -10,6 +10,7 @@ import { LabelEditor } from '@/components/Labels';
 import { DECISION_LABEL, KIND_TEXT, statusLabel, typeOf, type Me, type RequestDetail, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
 import Markdown from '@/components/Markdown';
+import LinkedText from '@/components/LinkedText';
 
 type Action = 'submit' | 'approve' | 'request-changes' | 'reject' | 'merge' | 'close' | 'reopen';
 
@@ -263,7 +264,7 @@ export default function RequestDetailScreen() {
               <Text style={{ backgroundColor: C.bg, padding: 8, fontSize: 13 }}>
                 <Text style={{ fontWeight: '700' }}>{e.user?.name ?? '退会したメンバー'}</Text> <Text style={s.muted}>{timeAgo(e.created_at)}にコメント</Text>
               </Text>
-              <Text style={{ padding: 10, color: C.fg }}>{e.body}</Text>
+              <Text style={{ padding: 10, color: C.fg }}><LinkedText>{e.body}</LinkedText></Text>
             </View>
           </View>
         ) : (

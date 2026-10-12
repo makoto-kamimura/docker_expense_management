@@ -9,6 +9,7 @@ import LinkCard from '@/components/LinkCard';
 import { previewImagePath } from '@/lib/types';
 import SlideDeck from './slide-deck';
 import Markdown from '@/components/Markdown';
+import LinkedText from '@/components/LinkedText';
 
 
 
@@ -114,7 +115,7 @@ export default async function SummaryPage({ params }: { params: { id: string } }
                   <p key={c.id} style={{ marginBottom: 12 }}>
                     <strong>{c.user?.name ?? '—'}</strong>
                     <br />
-                    <span className="pre">{c.body}</span>
+                    <span className="pre"><LinkedText>{c.body}</LinkedText></span>
                   </p>
                 ) : null,
               )}
