@@ -296,7 +296,7 @@ export default function RequestDetailScreen() {
             <>
               <Text style={{ fontWeight: '700' }}>あなたのレビューが依頼されています</Text>
               <Text style={s.ja}>金額・理由・リンク・資料を確認してください。</Text>
-              <TextInput style={[s.input, s.multi]} multiline value={comment} onChangeText={setComment} placeholder="コメント (修正依頼のときは必須)" />
+              <TextInput style={[s.input, s.multi]} multiline value={comment} onChangeText={setComment} placeholder="コメント (再確認を依頼するときは必須)" />
               <Button title="承認する" variant="primary" busy={busy} onPress={() =>
                 confirm(
                   'この稟議を承認しますか？',
@@ -305,7 +305,7 @@ export default function RequestDetailScreen() {
                   '承認する',
                   () => run('approve', true),
                 )} />
-              <Button title="修正を依頼" disabled={!comment.trim()} onPress={() => run('request-changes', true)} />
+              <Button title="再確認を依頼" disabled={!comment.trim()} onPress={() => run('request-changes', true)} />
               <Button title="コメントだけ送る" disabled={!comment.trim() || busy} onPress={postComment} />
               <Button title="却下" variant="danger" onPress={reject} />
             </>
@@ -319,7 +319,7 @@ export default function RequestDetailScreen() {
 
         {r.status === 'changes_needed' && (
           <>
-            <Text style={{ fontWeight: '700', color: C.red }}>修正が依頼されています</Text>
+            <Text style={{ fontWeight: '700', color: C.red }}>再確認が依頼されています</Text>
             {p.can_edit && <Button title="稟議を編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
             {p.can_submit && <Button title="再度レビューを依頼" variant="primary" busy={busy} onPress={() => run('submit')} />}
             {p.can_close && <Button title="取り下げ" variant="danger" onPress={withdraw} />}

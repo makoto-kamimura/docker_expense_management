@@ -90,18 +90,18 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
   if (r.status === 'submitted' || r.status === 'under_review') {
     if (p.can_approve) {
       return (
-        <Panel icon="eye" color="yellow" title="あなたのレビューが依頼されています" sub="金額・理由・リンク・資料を確認して、承認か修正依頼をしてください。">
+        <Panel icon="eye" color="yellow" title="あなたのレビューが依頼されています" sub="金額・理由・リンク・資料を確認して、承認か再確認の依頼をしてください。">
           {errorBox}
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             aria-label="レビューコメント"
-            placeholder="コメント (修正依頼のときは必須)"
+            placeholder="コメント (再確認を依頼するときは必須)"
           />
           <p className="muted small" style={{ marginTop: 4 }}>Markdown が使えます。URL はそのままリンクになります。</p>
           <div className="actions" style={{ marginTop: 8 }}>
             <button disabled={pending || !comment.trim()} onClick={() => run('request-changes', true)}>
-              修正を依頼
+              再確認を依頼
             </button>
             <ConfirmButton
               label="承認する"
@@ -138,14 +138,14 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
   // ---- Changes needed ----
   if (r.status === 'changes_needed') {
     return (
-      <Panel icon="redo" color="red" title="修正が依頼されています" sub="アクティビティのコメントを確認して、内容を更新してください。">
+      <Panel icon="redo" color="red" title="再確認が依頼されています" sub="アクティビティのコメントを確認して、内容を更新してください。">
         {errorBox}
         <div className="actions">
           {p.can_edit && <Link className="btn" href={`/requests/${r.id}/edit`}>稟議を編集</Link>}
           {p.can_submit && <button className="btn-primary" disabled={pending} onClick={() => run('submit')}>再度レビューを依頼</button>}
           {p.can_close && <WithdrawButton pending={pending} onWithdraw={() => run('close')} />}
           {p.can_reject && <RejectButton pending={pending} onReject={() => run('reject')} />}
-          {!isRequester && !p.can_reject && <span className="muted">申請者の修正を待っています。</span>}
+          {!isRequester && !p.can_reject && <span className="muted">申請者の再確認を待っています。</span>}
         </div>
       </Panel>
     );
@@ -247,7 +247,7 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
             onConfirm={() => run('reopen')}
           >
             <p>レビュー待ちに戻して、もう一度レビューしてもらいます。</p>
-            <p className="muted">レビュアーの判定はリセットされます。内容を直したいときは、再オープン後にレビュアーから修正依頼を受けてください。</p>
+            <p className="muted">レビュアーの判定はリセットされます。内容を直したいときは、再オープン後にレビュアーから再確認の依頼を受けてください。</p>
           </ConfirmButton>
         </div>
       )}
