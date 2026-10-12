@@ -684,7 +684,7 @@ async fn review(state: &AppState, me: &Member, id: Uuid, kind: Review, input: Ac
     }
     let comment = clean(&input.comment);
     if matches!(kind, Review::RequestChanges) && comment.is_none() {
-        return Err(ApiError::BadRequest("修正してほしい内容をコメントに書いてください".into()));
+        return Err(ApiError::BadRequest("再確認してほしい内容をコメントに書いてください".into()));
     }
     let (status_sql, decision, action) = match kind {
         Review::Approve => (

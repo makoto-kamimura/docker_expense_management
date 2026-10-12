@@ -87,9 +87,9 @@ export function describeEvent(e: Extract<TimelineEntry, { type: 'event' }>, kind
         : `${who} がこの申請を作成しました`;
     case 'branched': return `${who} がこの稟議から「${e.metadata.child_title ?? '新しい稟議'}」を分岐しました`;
     case 'submitted': return `${who} がレビューを依頼しました${choreNote(e.metadata)}`;
-    case 'resubmitted': return `${who} が修正して再度レビューを依頼しました${choreNote(e.metadata)}`;
+    case 'resubmitted': return `${who} が内容を見直して再度レビューを依頼しました${choreNote(e.metadata)}`;
     case 'started_review': return `${who} がレビューを開始しました`;
-    case 'changes_requested': return `${who} が修正を依頼しました`;
+    case 'changes_requested': return `${who} が再確認を依頼しました`;
     case 'approved': return `${who} が承認しました`;
     case 'rejected': return `${who} が却下しました`;
     case 'merged': return `${who} がマージしました`;
