@@ -1,8 +1,10 @@
 import { Linking, Platform, Text, View, type TextStyle } from 'react-native';
+import { URL_RE } from '@/format';
+import LinkedText from './LinkedText';
 import { C } from './ui';
 
 /**
- * Markdown を整えて表示する (購入理由など)。外部ライブラリを使わない小さな実装で、
+ * Markdown を整えて表示する (購入理由・コメントなど)。外部ライブラリを使わない小さな実装で、
  * 見出し・箇条書き / 番号付き・チェックリスト・引用・コードブロック・区切り線・段落と、
  * 太字・斜体・取り消し線・インラインコード・リンクに対応する。表などそれ以外は原文のまま出す。
  * Web (components/Markdown.tsx) と同じく、1つの改行も改行として出し、リンクは http / https / mailto だけを有効にする。
@@ -113,10 +115,9 @@ const INLINE: { re: RegExp; render: (m: RegExpExecArray, key: string, base: Text
     },
   },
   {
-    re: /https?:\/\/[^\s<>()]+/,
-    render: (m, key) => (
-      <Text key={key} style={{ color: C.accent }} onPress={() => Linking.openURL(m[0])}>{m[0]}</Text>
-    ),
+    // 裸の URL。「。」などの日本語や文末の記号は URL に含めない
+    re: new RegExp(URL_RE.source),
+    render: (m, key) => <Text key={key}><LinkedText>{m[0]}</LinkedText></Text>,
   },
   { re: /\*\*([^*]+)\*\*|__([^_]+)__/, render: (m, key, base) => <Text key={key} style={{ fontWeight: '700' }}>{renderInline(m[1] ?? m[2], key, base)}</Text> },
   { re: /~~([^~]+)~~/, render: (m, key, base) => <Text key={key} style={{ textDecorationLine: 'line-through', color: C.muted }}>{renderInline(m[1], key, base)}</Text> },

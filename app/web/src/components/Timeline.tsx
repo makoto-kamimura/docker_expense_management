@@ -1,6 +1,7 @@
 import type { RequestKind, TimelineEntry } from '@/lib/types';
 import { describeEvent, fmtDateTime, timeAgo } from '@/lib/format';
 import Avatar from './Avatar';
+import Markdown from './Markdown';
 import Octicon, { type IconName } from './Octicon';
 
 const EVENT_ICON: Record<string, IconName> = {
@@ -46,7 +47,7 @@ export default function Timeline({
                 </span>
                 {e.user?.id === requesterId && <span className="label label-muted">申請者</span>}
               </div>
-              <div className="box-body pre">{e.body}</div>
+              <div className="box-body"><Markdown>{e.body}</Markdown></div>
             </div>
           </div>
         ) : (

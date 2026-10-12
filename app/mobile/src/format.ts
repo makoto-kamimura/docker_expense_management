@@ -286,3 +286,27 @@ export function choreTimeTotalLabel(chores: Chore[], tab: ChorePeriodTab): strin
   return `合計 ⏱ ${durationLabel(t.once)}${per}${missing}`;
 }
 
+
+// 空白・日本語の句読点やかっこ・全角の記号までを URL とする (「https://example.com。」の「。」を含めない。かなや漢字は含める)
+export const URL_RE = /https?:\/\/[^\s<>"\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65]+/g;
+
+/** 文章を、ただの文字と URL に分ける (コメントの URL をリンクにするため) */
+export function splitUrls(text: string): { text: string; url?: string }[] {
+  const parts: { text: string; url?: string }[] = [];
+  let last = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    let url = m[0];
+    // 文末の句読点と、対応の取れない閉じかっこは URL に含めない
+    for (;;) {
+      if (/[.,;:!?'"]$/.test(url)) url = url.slice(0, -1);
+      else if (url.endsWith(')') && url.split('(').length < url.split(')').length) url = url.slice(0, -1);
+      else break;
+    }
+    const start = m.index ?? 0;
+    if (start > last) parts.push({ text: text.slice(last, start) });
+    parts.push({ text: url, url });
+    last = start + url.length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+  return parts;
+}

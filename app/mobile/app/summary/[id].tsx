@@ -88,7 +88,10 @@ export default function SummaryScreen() {
       <H>話し合い</H>
       {comments.length === 0 && <Text style={s.muted}>コメントはまだありません。</Text>}
       {comments.map((c) => c.type === 'comment' && (
-        <Text key={c.id} style={{ marginBottom: 10 }}><Text style={{ fontWeight: '700' }}>{c.user?.name}: </Text>{c.body}</Text>
+        <View key={c.id} style={{ marginBottom: 10, gap: 2 }}>
+          <Text style={{ fontWeight: '700', color: C.fg }}>{c.user?.name}</Text>
+          <Markdown fontSize={14}>{c.body}</Markdown>
+        </View>
       ))}
       <Text style={{ fontWeight: '700', marginTop: 12, marginBottom: 6 }}>レビューのチェックポイント</Text>
       {checkpoints(d).map((c) => (

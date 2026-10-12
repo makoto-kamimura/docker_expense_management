@@ -263,7 +263,7 @@ export default function RequestDetailScreen() {
               <Text style={{ backgroundColor: C.bg, padding: 8, fontSize: 13 }}>
                 <Text style={{ fontWeight: '700' }}>{e.user?.name ?? '退会したメンバー'}</Text> <Text style={s.muted}>{timeAgo(e.created_at)}にコメント</Text>
               </Text>
-              <Text style={{ padding: 10, color: C.fg }}>{e.body}</Text>
+              <View style={{ padding: 10 }}><Markdown fontSize={14}>{e.body}</Markdown></View>
             </View>
           </View>
         ) : (
@@ -385,6 +385,7 @@ export default function RequestDetailScreen() {
       {p.can_comment && r.status !== 'draft' && !p.can_approve && (
         <View style={{ gap: 8 }}>
           <TextInput style={[s.input, s.multi]} multiline value={comment} onChangeText={setComment} placeholder="質問や感想を書きましょう" />
+          <Text style={[s.muted, { fontSize: 12 }]}>Markdown が使えます。URL はそのままリンクになります。</Text>
           <Pressable disabled={!comment.trim() || busy} onPress={postComment}>
             <Text style={[s.link, { textAlign: 'right', fontWeight: '600', opacity: comment.trim() ? 1 : 0.4 }]}>コメントする</Text>
           </Pressable>
