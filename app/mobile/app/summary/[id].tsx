@@ -8,7 +8,6 @@ import { C, StatusBadge, s } from '@/components/ui';
 import { DECISION_LABEL, KIND_TEXT, type RequestDetail } from '@/types';
 import { useTheme } from '@/theme';
 import Markdown from '@/components/Markdown';
-import LinkedText from '@/components/LinkedText';
 
 
 /** 申請のまとめ資料。横スワイプでスライドを切り替える (Web の Summary と同じ構成)。 */
@@ -89,7 +88,10 @@ export default function SummaryScreen() {
       <H>話し合い</H>
       {comments.length === 0 && <Text style={s.muted}>コメントはまだありません。</Text>}
       {comments.map((c) => c.type === 'comment' && (
-        <Text key={c.id} style={{ marginBottom: 10 }}><Text style={{ fontWeight: '700' }}>{c.user?.name}: </Text><LinkedText>{c.body}</LinkedText></Text>
+        <View key={c.id} style={{ marginBottom: 10, gap: 2 }}>
+          <Text style={{ fontWeight: '700', color: C.fg }}>{c.user?.name}</Text>
+          <Markdown fontSize={14}>{c.body}</Markdown>
+        </View>
       ))}
       <Text style={{ fontWeight: '700', marginTop: 12, marginBottom: 6 }}>レビューのチェックポイント</Text>
       {checkpoints(d).map((c) => (

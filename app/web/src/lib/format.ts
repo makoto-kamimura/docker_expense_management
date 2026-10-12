@@ -286,8 +286,8 @@ export function choreTimeTotalLabel(chores: Chore[], tab: ChorePeriodTab): strin
 }
 
 
-// URL に使える ASCII の文字だけを拾う (「https://example.com。」の句読点を含めない)
-const URL_RE = /https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g;
+// 空白・日本語の句読点やかっこ・全角の記号までを URL とする (「https://example.com。」の「。」を含めない。かなや漢字は含める)
+const URL_RE = /https?:\/\/[^\s<>"\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65]+/g;
 
 /** 文章を、ただの文字と URL に分ける (コメントの URL をリンクにするため) */
 export function splitUrls(text: string): { text: string; url?: string }[] {

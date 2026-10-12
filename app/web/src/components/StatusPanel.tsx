@@ -98,6 +98,7 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
             aria-label="レビューコメント"
             placeholder="コメント (修正依頼のときは必須)"
           />
+          <p className="muted small" style={{ marginTop: 4 }}>Markdown が使えます。URL はそのままリンクになります。</p>
           <div className="actions" style={{ marginTop: 8 }}>
             <button disabled={pending || !comment.trim()} onClick={() => run('request-changes', true)}>
               修正を依頼

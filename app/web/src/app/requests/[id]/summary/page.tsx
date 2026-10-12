@@ -9,7 +9,6 @@ import LinkCard from '@/components/LinkCard';
 import { previewImagePath } from '@/lib/types';
 import SlideDeck from './slide-deck';
 import Markdown from '@/components/Markdown';
-import LinkedText from '@/components/LinkedText';
 
 
 
@@ -112,11 +111,10 @@ export default async function SummaryPage({ params }: { params: { id: string } }
               {comments.length === 0 && <p className="muted">コメントはまだありません。</p>}
               {comments.map((c) =>
                 c.type === 'comment' ? (
-                  <p key={c.id} style={{ marginBottom: 12 }}>
+                  <div key={c.id} style={{ marginBottom: 12 }}>
                     <strong>{c.user?.name ?? '—'}</strong>
-                    <br />
-                    <span className="pre"><LinkedText>{c.body}</LinkedText></span>
-                  </p>
+                    <Markdown>{c.body}</Markdown>
+                  </div>
                 ) : null,
               )}
             </div>

@@ -1,21 +1,45 @@
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import { splitUrls } from '@/lib/format';
 
 /** リンクとして有効にする URL (それ以外は無効にする。javascript: などを防ぐ) */
 function safeUrl(url: string): string {
   return /^(https?:|mailto:)/i.test(url.trim()) ? url : '';
 }
 
+/** 自動リンク (URL をそのまま書いたもの) か。href は「。」などがパーセントエンコードされている */
+function isAutolink(href: string, children: React.ReactNode): children is string {
+  if (typeof children !== 'string') return false;
+  try {
+    return decodeURI(href) === children;
+  } catch {
+    return false;
+  }
+}
+
 const components: Components = {
   // リンクは新しいタブで開く (無効な URL は文字だけにする)
   a: ({ href, children }) =>
-    href ? (
+    !href ? (
+      <span>{children}</span>
+    ) : isAutolink(href, children) ? (
+      // 自動リンクは「。」などの日本語まで URL に含めてしまうので、URL の部分だけをリンクにする
+      <>
+        {splitUrls(children).map((p, i) =>
+          p.url ? (
+            <a key={i} href={p.url} target="_blank" rel="noopener noreferrer">
+              {p.text}
+            </a>
+          ) : (
+            p.text
+          ),
+        )}
+      </>
+    ) : (
       <a href={href} target="_blank" rel="noopener noreferrer">
         {children}
       </a>
-    ) : (
-      <span>{children}</span>
     ),
   // 画像の埋め込みは外部への読み込みになるので、リンクとして出す
   img: ({ src, alt }) =>
@@ -27,7 +51,7 @@ const components: Components = {
 };
 
 /**
- * Markdown (GFM) を整えて表示する (購入理由など)。
+ * Markdown (GFM) を整えて表示する (購入理由・コメントなど)。
  * 1つの改行も改行として出す (GitHub のコメントと同じ)。HTML の直書きは HTML にせず文字のまま出す。
  */
 export default function Markdown({ children, className }: { children: string; className?: string }) {
