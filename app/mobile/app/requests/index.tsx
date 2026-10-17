@@ -3,16 +3,16 @@ import { Alert, FlatList, Image, Pressable, RefreshControl, ScrollView, Text, Vi
 import { router, useFocusEffect } from 'expo-router';
 import { apiFetch, clearToken, getToken, linkPreviewUrl } from '@/api';
 import { money, timeAgo } from '@/format';
-import { Button, C, s, statusColor } from '@/components/ui';
+import { Button, C, s, StatusBadge, statusColor } from '@/components/ui';
 import { LabelList } from '@/components/Labels';
-import { FILTERS, statusLabel, typeOf, type LinkedRequest, type Me, type RequestListItem, type RequestType } from '@/types';
+import { DEFAULT_FILTER, FILTERS, statusLabel, typeOf, type FilterKey, type LinkedRequest, type Me, type RequestCounts, type RequestListItem, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
 
 /** トップ: 申請一覧 + フィルター (readme.md 8.6節) */
 export default function RequestsScreen() {
   useTheme();
   const [items, setItems] = useState<RequestListItem[]>([]);
-  const [filter, setFilter] = useState<string>('all');
+  const [filter, setFilter] = useState<FilterKey>(DEFAULT_FILTER);
   // 種類で絞り込む (種類の ID)
   const [kind, setKind] = useState<string | null>(null);
   const [types, setTypes] = useState<RequestType[]>([]);
@@ -26,22 +26,23 @@ export default function RequestsScreen() {
       return next;
     });
   const [me, setMe] = useState<Me | null>(null);
-  const [toReview, setToReview] = useState(0);
+  // タブの件数 (種類の絞り込みは反映する)
+  const [counts, setCounts] = useState<RequestCounts | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [token, setTokenState] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setRefreshing(true);
-      const [data, review, self, typeList] = await Promise.all([
+      const [data, count, self, typeList] = await Promise.all([
         apiFetch<RequestListItem[]>(`/requests?filter=${filter}${kind ? `&type=${kind}` : ''}`),
-        apiFetch<RequestListItem[]>('/requests?filter=to_review'),
+        apiFetch<RequestCounts>(`/requests/counts${kind ? `?type=${kind}` : ''}`),
         apiFetch<Me>('/me'),
         apiFetch<RequestType[]>('/request-types'),
       ]);
       setItems(data);
       setTypes(typeList);
-      setToReview(review.length);
+      setCounts(count);
       setMe(self);
       setTokenState(await getToken());
     } catch (e) {
@@ -87,18 +88,20 @@ export default function RequestsScreen() {
           )}
         </View>
       </View>
-      <View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 6, paddingBottom: 8 }}>
+      <View style={{ gap: 6, paddingBottom: 8 }}>
+        {/* 1段目: 状態 (件数つき) / 2段目: 種類 */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 6 }}>
           {FILTERS.map((f) => {
             const on = f.key === filter;
-            const label = f.key === 'to_review' && toReview > 0 ? `${f.label}（${toReview}）` : f.label;
+            const label = counts ? `${f.label}（${counts[f.key]}）` : f.label;
             return (
               <Pressable key={f.key} onPress={() => setFilter(f.key)} style={[s.chip, on && { backgroundColor: C.fg, borderColor: C.fg }]}>
                 <Text style={[s.chipText, on && { color: C.card, fontWeight: '600' }]}>{label}</Text>
               </Pressable>
             );
           })}
-          <View style={{ width: 1, backgroundColor: C.border, marginHorizontal: 4 }} />
+        </ScrollView>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 6 }}>
           {([null, ...types.filter((x) => !x.hidden || x.id === kind)] as (RequestType | null)[]).map((x) => {
             const on = (x?.id ?? null) === kind;
             return (
@@ -114,26 +117,35 @@ export default function RequestsScreen() {
         keyExtractor={(i) => i.id}
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}
-        ListEmptyComponent={<Text style={[s.muted, { textAlign: 'center', marginTop: 40 }]}>該当する稟議はありません。</Text>}
+        ListEmptyComponent={
+          <View style={{ alignItems: 'center', marginTop: 40, gap: 8 }}>
+            <Text style={s.muted}>該当する稟議はありません。</Text>
+            {filter !== 'all' && counts && counts.all > 0 && (
+              <Text style={s.link} onPress={() => setFilter('all')}>すべての稟議を見る（{counts.all}件）</Text>
+            )}
+          </View>
+        }
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push(`/requests/${item.id}`)}
             style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 6, padding: 12, marginBottom: 8, flexDirection: 'row', gap: 10 }}
           >
-            <View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 6, backgroundColor: statusColor(item.status) }} />
             {item.preview_id && (
               <Image
                 source={{ uri: linkPreviewUrl(item.preview_id), headers: token ? { Authorization: `Bearer ${token}` } : undefined }}
                 style={{ width: 48, height: 48, borderRadius: 6, backgroundColor: C.bg }}
               />
             )}
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, gap: 4 }}>
+              {/* 状態と金額 / タイトル / ラベル / 申請者・レビュアー・更新 */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <StatusBadge status={item.status} kind={item.kind} />
+                <Text style={{ fontSize: 16, fontWeight: '700', color: C.fg }}>{money(item.actual_price ?? item.price, item.currency)}</Text>
+              </View>
               <Text style={{ fontSize: 16, fontWeight: '600', color: C.fg }}>{typeOf(types, item.type_id, item.kind).icon} {item.title}</Text>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: C.fg, marginTop: 2 }}>{money(item.actual_price ?? item.price, item.currency)}</Text>
-              <Text style={[s.muted, { fontWeight: '600', color: statusColor(item.status) }]}>{statusLabel(item.kind, item.status)}</Text>
               <LabelList labels={item.labels} />
               <Text style={s.muted}>
-                #{item.id.slice(0, 7)} · {item.requester_name} · レビュアー: {item.reviewer_names.join('、') || '—'}
+                #{item.id.slice(0, 7)} · {item.requester_name} の申請 · レビュアー: {item.reviewer_names.join('、') || '—'}
               </Text>
               <Text style={s.muted}>
                 {timeAgo(item.updated_at)}に更新{item.comment_count > 0 ? ` · 💬 ${item.comment_count}` : ''}

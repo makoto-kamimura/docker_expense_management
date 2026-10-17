@@ -695,6 +695,18 @@ pub struct ListQuery {
     pub label: Option<Uuid>,
 }
 
+/// 一覧のフィルターごとの件数 (種類・ラベルの絞り込みは反映する)
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct RequestCounts {
+    pub waiting: i64,
+    pub to_review: i64,
+    pub mine: i64,
+    pub approved: i64,
+    pub purchased: i64,
+    pub closed: i64,
+    pub all: i64,
+}
+
 /// ラベル別の支出。label が None なら「ラベルなし」
 #[derive(Debug, Serialize)]
 pub struct LabelTotal {

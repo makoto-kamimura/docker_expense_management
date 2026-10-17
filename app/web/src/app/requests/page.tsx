@@ -3,12 +3,13 @@ import { redirect } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { money, timeAgo } from '@/lib/format';
-import { FILTERS, STATUS_GROUP, statusLabel, typeOf, type Label, type LinkedRequest, type RequestListItem, type RequestType } from '@/lib/types';
+import { DEFAULT_FILTER, FILTERS, STATUS_GROUP, statusLabel, typeOf, type FilterKey, type Label, type LinkedRequest, type RequestCounts, type RequestListItem, type RequestType } from '@/lib/types';
 import LabelChip from '@/components/LabelChip';
 import Octicon, { statusIcon } from '@/components/Octicon';
+import StatusBadge from '@/components/StatusBadge';
 import { Thumb } from '@/components/LinkCard';
 
-const EMPTY_TEXT: Record<string, string> = {
+const EMPTY_TEXT: Record<FilterKey, string> = {
   all: 'まだ稟議がありません',
   waiting: 'レビュー待ちの稟議はありません',
   to_review: 'あなたのレビュー待ちはありません 🎉',
@@ -25,7 +26,8 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
   const user = await requireUser();
   if (!user.onboarded) redirect('/onboarding');
 
-  const filter = FILTERS.some((f) => f.key === searchParams.filter) ? searchParams.filter! : 'all';
+  // フィルターの指定がなければレビュー待ちを開く
+  const filter: FilterKey = FILTERS.find((f) => f.key === searchParams.filter)?.key ?? DEFAULT_FILTER;
   // 種類・ラベルでの絞り込みは、グループに実在する ID のときだけ使う
   const [labels, types] = await Promise.all([apiFetch<Label[]>('/labels'), apiFetch<RequestType[]>('/request-types')]);
   const label = labels.find((l) => l.id === searchParams.label) ?? null;
@@ -36,11 +38,17 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
   const qs = new URLSearchParams({ filter });
   if (kind) qs.set('type', kind);
   if (label) qs.set('label', label.id);
-  const items = await apiFetch<RequestListItem[]>(`/requests?${qs}`);
+  // タブの件数は、種類・ラベルの絞り込みだけを反映する
+  const scope = new URLSearchParams(qs);
+  scope.delete('filter');
+  const [items, counts] = await Promise.all([
+    apiFetch<RequestListItem[]>(`/requests?${qs}`),
+    apiFetch<RequestCounts>(`/requests/counts?${scope}`),
+  ]);
   // フィルター・種類・ラベルを組み合わせたリンク
-  const href = (f: string, k: string | null, l: string | null = label?.id ?? null) => {
+  const href = (f: FilterKey, k: string | null, l: string | null = label?.id ?? null) => {
     const q = new URLSearchParams();
-    if (f !== 'all') q.set('filter', f);
+    if (f !== DEFAULT_FILTER) q.set('filter', f);
     if (k) q.set('type', k);
     if (l) q.set('label', l);
     return q.toString() ? `/requests?${q}` : '/requests';
@@ -57,11 +65,12 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
       </div>
 
       <div className="box">
-        <div className="box-head">
-          <nav className="filters" aria-label="稟議の絞り込み">
+        <div className="box-head list-filters">
+          <nav className="filters" aria-label="状態で絞り込み">
             {FILTERS.map((f) => (
-              <Link key={f.key} href={href(f.key, kind)} className={f.key === filter ? 'on' : ''}>
+              <Link key={f.key} href={href(f.key, kind)} className={f.key === filter ? 'on' : ''} aria-current={f.key === filter ? 'page' : undefined}>
                 {f.label}
+                <span className="counter">{counts[f.key]}</span>
               </Link>
             ))}
           </nav>
@@ -88,20 +97,26 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
             {filter === 'all' && user.can_request && (
               <Link className="btn btn-primary" href="/requests/new">最初の稟議を作成</Link>
             )}
+            {filter !== 'all' && counts.all > 0 && (
+              <Link href={href('all', kind)}>すべての稟議を見る ({counts.all}件)</Link>
+            )}
           </div>
         ) : (
           items.map((r) => (
             <div key={r.id} className="req-item">
-              <span className={`icon-${STATUS_GROUP[r.status]}`} title={statusLabel(r.kind, r.status)}>
-                <Octicon name={statusIcon(r.status)} />
-              </span>
               <div className="req-main">
-                <Link href={`/requests/${r.id}`} className="req-title">{r.title}</Link>
-                <span className="label label-outing">{typeOf(types, r.type_id, r.kind).icon} {typeOf(types, r.type_id, r.kind).name}</span>
-                {r.labels.map((l) => <LabelChip key={l.id} label={l} href={href(filter, kind, l.id)} />)}
+                <div className="req-head">
+                  <StatusBadge status={r.status} kind={r.kind} small />
+                  <Link href={`/requests/${r.id}`} className="req-title">{r.title}</Link>
+                </div>
+                <div className="req-tags">
+                  <TypeChip r={r} types={types} href={r.type_id ? href(filter, r.type_id) : null} />
+                  {r.labels.map((l) => <LabelChip key={l.id} label={l} href={href(filter, kind, l.id)} />)}
+                </div>
                 <div className="req-meta">
-                  #{shortId(r.id)} · {r.requester_name} が{timeAgo(r.created_at)}に作成 · {statusLabel(r.kind, r.status)}
+                  #{shortId(r.id)} · {r.requester_name} の申請
                   {r.reviewer_names.length > 0 && <> · レビュアー: {r.reviewer_names.join('、')}</>}
+                  {' '}· {timeAgo(r.updated_at)}に更新
                 </div>
                 <LinkedRequests r={r} types={types} />
               </div>
@@ -118,6 +133,13 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
       </div>
     </div>
   );
+}
+
+/** 行の種類。押すとその種類で絞り込む (種類のない古い稟議は押せない) */
+function TypeChip({ r, types, href }: { r: RequestListItem; types: RequestType[]; href: string | null }) {
+  const t = typeOf(types, r.type_id, r.kind);
+  const text = `${t.icon} ${t.name}`;
+  return href ? <Link href={href} className="label label-outing">{text}</Link> : <span className="label label-outing">{text}</span>;
 }
 
 /** 紐づいた稟議 (分岐元・分岐先) の折りたたみ。紐づいた稟議がない行には出さない */
