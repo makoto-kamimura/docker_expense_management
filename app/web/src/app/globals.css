@@ -298,14 +298,24 @@ input[type=checkbox], input[type=radio] { width: auto; min-height: 0; box-shadow
 .filters a { color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
 .filters a:hover { color: var(--fg); text-decoration: none; }
 .filters a.on { color: var(--fg); font-weight: 600; }
-.req-item { display: flex; gap: 8px; padding: 8px 16px; border-top: 1px solid var(--border); align-items: flex-start; }
+.req-item { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); align-items: flex-start; }
 .req-item:first-child { border-top: 0; }
 .req-item:hover { background: var(--subtle); }
 .req-item > svg { margin-top: 4px; }
 .req-main { flex: 1; min-width: 0; }
 .req-title { font-weight: 600; font-size: 16px; color: var(--fg); margin-right: 4px; }
 .req-title:hover { color: var(--accent); text-decoration: none; }
+.req-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.req-tags { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.req-tags .label-outing { margin-right: 0; }
+.req-tags a.label-outing:hover { text-decoration: none; filter: brightness(0.95); }
 .req-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+/* 一覧の絞り込み: 1段目が状態、2段目が種類 */
+.list-filters { flex-direction: column; align-items: stretch; gap: 8px; }
+.list-filters .filters + .filters { margin-left: 0; padding-top: 8px; border-top: 1px solid var(--border); font-size: 13px; }
+.list-filters .filters .counter { margin-left: 2px; }
+.list-filters .filters > span:last-child { margin-left: auto; }
+.list-filters .filters a.on .counter { background: var(--fg); color: var(--bg); }
 .req-side { display: flex; align-items: center; gap: 16px; white-space: nowrap; color: var(--muted); font-size: 12px; }
 .req-price { font-weight: 600; font-size: 14px; color: var(--fg); font-variant-numeric: tabular-nums; }
 .empty { padding: 48px 16px; text-align: center; color: var(--muted); }

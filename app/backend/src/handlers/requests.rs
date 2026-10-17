@@ -14,7 +14,7 @@ use crate::{
     models::{
         ActionInput, LinkPreview, RequestCategory, AlternativeInput, AlternativeProduct, Attachment, CommentInput, ListQuery,
         Member, Permissions, PurchaseInput, PurchaseRequest, RequestDetail, RequestInput, RequestKind,
-        RequestListItem, RequestRef, RequestStatus, Reviewer, ReviewerDecision, TimelineEntry, UserRef,
+        RequestCounts, RequestListItem, RequestRef, RequestStatus, Reviewer, ReviewerDecision, TimelineEntry, UserRef,
     },
     state::AppState,
 };
@@ -301,34 +301,54 @@ pub async fn list(
            FROM purchase_requests r JOIN users u ON u.id = r.requester_id
           WHERE r.family_id = ",
     );
+    push_scope(&mut b, &me, &q);
+    match q.filter.as_deref().unwrap_or("all") {
+        "all" => {}
+        key => match FILTERS.iter().find(|(k, _)| *k == key) {
+            Some((_, cond)) => {
+                b.push(" AND ");
+                push_filter(&mut b, &me, cond);
+            }
+            None => return Err(ApiError::BadRequest(format!("unknown filter: {key}"))),
+        },
+    }
+    // 進行中 → 承認済み → 完了 → クローズの順。同じ段階の中は更新が新しい順
+    b.push(
+        " ORDER BY CASE WHEN r.status IN ('approved', 'merged') THEN 1
+                        WHEN r.status = 'purchased' THEN 2
+                        WHEN r.status = 'closed' THEN 3
+                        ELSE 0 END, r.updated_at DESC",
+    );
+    Ok(Json(b.build_query_as().fetch_all(&state.db).await?))
+}
+
+/// 一覧のフィルター ("all" 以外) と、その条件。`{me}` はログインユーザーの ID に置き換える
+const FILTERS: [(&str, &str); 6] = [
+    ("waiting", "r.status IN ('submitted', 'under_review')"),
+    (
+        "to_review",
+        "r.status IN ('submitted', 'under_review')
+         AND EXISTS (SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me})",
+    ),
+    ("mine", "r.requester_id = {me}"),
+    ("approved", "r.status IN ('approved', 'merged')"),
+    ("purchased", "r.status = 'purchased'"),
+    ("closed", "r.status = 'closed'"),
+];
+
+fn push_filter(b: &mut sqlx::QueryBuilder<'_, sqlx::Postgres>, me: &Member, cond: &str) {
+    let mut parts = cond.split("{me}");
+    b.push(parts.next().unwrap_or_default());
+    for part in parts {
+        b.push_bind(me.id).push(part);
+    }
+}
+
+/// 一覧と件数で共通の範囲: 自分の家族の稟議 (他人の Draft は除く) を、種類・ラベルで絞り込む
+fn push_scope(b: &mut sqlx::QueryBuilder<'_, sqlx::Postgres>, me: &Member, q: &ListQuery) {
     b.push_bind(me.family_id);
     // 他人の Draft は見せない
     b.push(" AND (r.status <> 'draft' OR r.requester_id = ").push_bind(me.id).push(")");
-    match q.filter.as_deref().unwrap_or("all") {
-        "waiting" => {
-            b.push(" AND r.status IN ('submitted', 'under_review')");
-        }
-        "to_review" => {
-            b.push(" AND r.status IN ('submitted', 'under_review')")
-                .push(" AND EXISTS (SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = ")
-                .push_bind(me.id)
-                .push(")");
-        }
-        "mine" => {
-            b.push(" AND r.requester_id = ").push_bind(me.id);
-        }
-        "approved" => {
-            b.push(" AND r.status IN ('approved', 'merged')");
-        }
-        "purchased" => {
-            b.push(" AND r.status = 'purchased'");
-        }
-        "closed" => {
-            b.push(" AND r.status = 'closed'");
-        }
-        "all" => {}
-        other => return Err(ApiError::BadRequest(format!("unknown filter: {other}"))),
-    }
     if let Some(kind) = q.kind {
         b.push(" AND r.kind = ").push_bind(kind);
     }
@@ -340,8 +360,23 @@ pub async fn list(
             .push_bind(label)
             .push(")");
     }
-    b.push(" ORDER BY r.updated_at DESC");
-    Ok(Json(b.build_query_as().fetch_all(&state.db).await?))
+}
+
+/// フィルターごとの件数 (一覧のタブに出す)。filter は無視し、種類・ラベルの絞り込みは反映する
+pub async fn counts(
+    State(state): State<AppState>,
+    AuthUser(me): AuthUser,
+    Query(q): Query<ListQuery>,
+) -> ApiResult<Json<RequestCounts>> {
+    let mut b = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT ");
+    for (key, cond) in FILTERS {
+        b.push("COUNT(*) FILTER (WHERE ");
+        push_filter(&mut b, &me, cond);
+        b.push(format!(") AS {key}, "));
+    }
+    b.push("COUNT(*) AS \"all\" FROM purchase_requests r WHERE r.family_id = ");
+    push_scope(&mut b, &me, &q);
+    Ok(Json(b.build_query_as().fetch_one(&state.db).await?))
 }
 
 /// 詳細。Reviewer が Submitted の申請を開いたら Under Review に進める。

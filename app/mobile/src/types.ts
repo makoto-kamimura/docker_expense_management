@@ -511,16 +511,21 @@ export const DECISION_LABEL: Record<ReviewerDecision, string> = {
   rejected: '却下',
 };
 
-/** 一覧のフィルター */
+/** 一覧のフィルター (並びはタブの順。「すべて」は最後) */
 export const FILTERS = [
-  { key: 'all', label: 'すべて' },
   { key: 'waiting', label: 'レビュー待ち' },
   { key: 'to_review', label: '自分のレビュー待ち' },
   { key: 'mine', label: '自分の申請' },
   { key: 'approved', label: '承認済み' },
   { key: 'purchased', label: '完了' },
   { key: 'closed', label: 'クローズ' },
+  { key: 'all', label: 'すべて' },
 ] as const;
+export type FilterKey = (typeof FILTERS)[number]['key'];
+/** 一覧を開いたときのフィルター */
+export const DEFAULT_FILTER: FilterKey = 'waiting';
+/** フィルターごとの件数 (GET /requests/counts。種類・ラベルの絞り込みは反映する) */
+export type RequestCounts = Record<FilterKey, number>;
 
 // ---------------------------------------------------------------------------
 // 家事のコミット

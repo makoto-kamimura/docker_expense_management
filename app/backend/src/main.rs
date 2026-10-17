@@ -70,6 +70,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route("/dashboard", get(handlers::dashboard::get))
         .route("/requests", get(handlers::requests::list).post(handlers::requests::create))
+        .route("/requests/counts", get(handlers::requests::counts))
         .route(
             "/requests/:id",
             get(handlers::requests::get_one)

@@ -18,7 +18,7 @@ export default async function DashboardPage() {
     <div>
       <h1>ダッシュボード <span className="ja">家庭内の購入状況</span></h1>
       <div className="stats">
-        <Stat k="稟議の数" v={d.total_requests} href="/requests" />
+        <Stat k="稟議の数" v={d.total_requests} href="/requests?filter=all" />
         <Stat k="レビュー待ち" v={d.waiting_for_review} href="/requests?filter=waiting" />
         <Stat k="自分のレビュー待ち" v={d.waiting_for_my_review} href="/requests?filter=to_review" />
         <Stat k="承認済み (購入前)" v={d.approved} href="/requests?filter=approved" />
@@ -82,7 +82,7 @@ export default async function DashboardPage() {
                 {d.by_label.map((c) => (
                   <tr key={c.label?.id ?? 'none'}>
                     <td style={{ width: 160 }}>
-                      {c.label ? <LabelChip label={c.label} href={`/requests?label=${c.label.id}`} /> : <span className="muted">ラベルなし</span>}
+                      {c.label ? <LabelChip label={c.label} href={`/requests?filter=all&label=${c.label.id}`} /> : <span className="muted">ラベルなし</span>}
                     </td>
                     <td>
                       <div className="bar" role="img" aria-label={`${Math.round((c.total / max) * 100)}%`}>
