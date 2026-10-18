@@ -115,6 +115,10 @@ export interface RequestListItem extends PurchaseRequest {
   children: LinkedRequest[];
   /** 見える分岐先の数 (children より多ければ残りは詳細画面で見る) */
   children_count: number;
+  /** 次に動くのが自分か (ボールを持っているか) */
+  my_turn: boolean;
+  /** 自分の立場 */
+  viewer_role: ViewerRole;
 }
 
 /** 一覧の行に紐づいた稟議 (分岐元・分岐先) */
@@ -232,6 +236,8 @@ export interface RequestDetail {
   previews: LinkPreview[];
   /** 申請者の家事の実績 (レビューの判断材料) */
   requester_contributions: ContributionSummary;
+  /** 次に動くのが自分か (ボールを持っているか) */
+  my_turn: boolean;
 }
 
 export interface Dashboard {
@@ -239,6 +245,9 @@ export interface Dashboard {
   total_requests: number;
   waiting_for_review: number;
   waiting_for_my_review: number;
+  /** 次に動くのが自分の稟議 / 自分が当事者で、相手の対応を待っている稟議 */
+  my_turn: number;
+  their_turn: number;
   approved: number;
   purchased: number;
   total_spending: number;
@@ -499,8 +508,36 @@ export function submitMissing(
   return missing;
 }
 
-export function statusLabel(kind: RequestKind, status: RequestStatus): string {
+/** 見る人の立場 (申請者 / レビュアー / それ以外のメンバー) */
+export type ViewerRole = 'requester' | 'reviewer' | 'other';
+
+/** 再確認の依頼は、どちらがボールを持っているかがわかるように、見る人の立場で表示を変える */
+const CHANGES_NEEDED_LABEL: Record<ViewerRole, string> = {
+  requester: '確認依頼あり',
+  reviewer: '確認待ち',
+  other: '申請者の確認待ち',
+};
+const CHANGES_NEEDED_HINT: Record<ViewerRole, string> = {
+  requester: 'レビュアーから確認を依頼されています。内容を見直して再申請してください',
+  reviewer: '申請者が内容を確認しています',
+  other: '申請者が内容を確認しています',
+};
+
+/** 状態の表示名。viewer を渡すと、再確認の依頼を立場に合わせた名前にする */
+export function statusLabel(kind: RequestKind, status: RequestStatus, viewer?: ViewerRole): string {
+  if (status === 'changes_needed' && viewer) return CHANGES_NEEDED_LABEL[viewer];
   return status === 'purchased' ? KIND_TEXT[kind].done : STATUS_LABEL[status];
+}
+
+export function statusHint(status: RequestStatus, viewer?: ViewerRole): string {
+  if (status === 'changes_needed' && viewer) return CHANGES_NEEDED_HINT[viewer];
+  return STATUS_HINT[status];
+}
+
+/** 詳細画面での自分の立場 */
+export function viewerRole(d: Pick<RequestDetail, 'requester' | 'reviewers'>, meId: string): ViewerRole {
+  if (d.requester.id === meId) return 'requester';
+  return d.reviewers.some((x) => x.id === meId) ? 'reviewer' : 'other';
 }
 
 export const DECISION_LABEL: Record<ReviewerDecision, string> = {
@@ -512,6 +549,8 @@ export const DECISION_LABEL: Record<ReviewerDecision, string> = {
 
 /** 一覧のフィルター (並びはタブの順。「すべて」は最後) */
 export const FILTERS = [
+  { key: 'my_turn', label: '自分の番' },
+  { key: 'their_turn', label: '相手の番' },
   { key: 'waiting', label: 'レビュー待ち' },
   { key: 'to_review', label: '自分のレビュー待ち' },
   { key: 'mine', label: '自分の申請' },

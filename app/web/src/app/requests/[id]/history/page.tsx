@@ -48,7 +48,7 @@ export default async function HistoryPage({ params }: { params: { id: string } }
 
   return (
     <div>
-      <RequestHeader d={d} canRequest={user.can_request} />
+      <RequestHeader d={d} canRequest={user.can_request} meId={user.id} />
       <RequestTabs id={r.id} active="history" d={d} />
 
       {groups.length === 0 && <p className="muted">履歴はまだありません。</p>}

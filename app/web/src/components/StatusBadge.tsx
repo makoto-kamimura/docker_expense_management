@@ -1,26 +1,44 @@
-import type { RequestKind, RequestStatus } from '@/lib/types';
-import { STATUS_GROUP, STATUS_HINT, statusLabel } from '@/lib/types';
+import type { RequestKind, RequestStatus, ViewerRole } from '@/lib/types';
+import { STATUS_GROUP, statusHint, statusLabel } from '@/lib/types';
 import Octicon, { statusIcon } from './Octicon';
 
-/** GitHub の PR 状態ラベル風 (Open = 緑 / Draft = 灰 / Merged = 紫 / Closed = 赤)。hint で説明を添える。 */
+/**
+ * GitHub の PR 状態ラベル風 (Open = 緑 / Draft = 灰 / Merged = 紫 / Closed = 赤)。hint で説明を添える。
+ * viewer を渡すと再確認の依頼を立場に合わせた名前 (確認依頼あり / 確認待ち) にし、myTurn なら「あなたの番」を添える。
+ */
 export default function StatusBadge({
   status,
   kind = 'purchase',
   small,
   hint,
+  viewer,
+  myTurn,
 }: {
   status: RequestStatus;
   kind?: RequestKind;
   small?: boolean;
   hint?: boolean;
+  viewer?: ViewerRole;
+  myTurn?: boolean;
 }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <span className={`state state-${STATUS_GROUP[status]}${small ? ' state-sm' : ''}`}>
         <Octicon name={statusIcon(status)} />
-        {statusLabel(kind, status)}
+        {statusLabel(kind, status, viewer)}
       </span>
-      {hint && <span className="muted">{STATUS_HINT[status]}</span>}
+      {myTurn && <TurnChip />}
+      {hint && <span className="muted">{statusHint(status, viewer)}</span>}
+    </span>
+  );
+}
+
+/** 次に動くのが自分であることの印 */
+export function TurnChip() {
+  return (
+    <span className="turn-chip" title="次はあなたが対応する番です">
+      <Octicon name="arrow" size={12} />
+      あなたの番
     </span>
   );
 }

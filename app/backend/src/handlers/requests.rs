@@ -230,7 +230,9 @@ async fn build_detail(state: &AppState, me: &Member, request: PurchaseRequest) -
     .await?;
     let requester_contributions = chores::contributions(&state.db, request.family_id, request.requester_id).await?;
     let labels = labels_of(state, id).await?;
+    let my_turn = is_my_turn(&state.db, me, id).await?;
     Ok(RequestDetail {
+        my_turn,
         labels,
         requester_contributions,
         previews,
@@ -296,8 +298,12 @@ pub async fn list(
     );
     b.push_bind(me.id).push(") ORDER BY p.created_at LIMIT ").push(LINKED_CHILDREN_LIMIT.to_string());
     b.push(") x), '[]'::json) AS children, (SELECT COUNT(*) FROM purchase_requests p WHERE p.parent_id = r.id AND (p.status <> 'draft' OR p.requester_id = ");
-    b.push_bind(me.id).push(
-        ")) AS children_count
+    b.push_bind(me.id).push(")) AS children_count, ");
+    push_filter(&mut b, &me, MY_TURN);
+    b.push(" AS my_turn, ");
+    push_filter(&mut b, &me, VIEWER_ROLE);
+    b.push(
+        " AS viewer_role
            FROM purchase_requests r JOIN users u ON u.id = r.requester_id
           WHERE r.family_id = ",
     );
@@ -312,18 +318,46 @@ pub async fn list(
             None => return Err(ApiError::BadRequest(format!("unknown filter: {key}"))),
         },
     }
-    // 進行中 → 承認済み → 完了 → クローズの順。同じ段階の中は更新が新しい順
+    // 進行中 → 承認済み → 完了 → クローズの順。同じ段階の中は自分の番を先に、更新が新しい順
     b.push(
         " ORDER BY CASE WHEN r.status IN ('approved', 'merged') THEN 1
                         WHEN r.status = 'purchased' THEN 2
                         WHEN r.status = 'closed' THEN 3
-                        ELSE 0 END, r.updated_at DESC",
+                        ELSE 0 END, my_turn DESC, r.updated_at DESC",
     );
     Ok(Json(b.build_query_as().fetch_all(&state.db).await?))
 }
 
+/// 次に動くのが自分か (ボールを持っているか)。`{me}` はログインユーザーの ID に置き換える。
+/// レビュー待ち = まだ判定していないレビュアー / 再確認の依頼・下書き・マージ済み = 申請者 / 承認済み = マージできる当事者
+macro_rules! my_turn_sql {
+    () => {
+        "(CASE
+            WHEN r.status IN ('draft', 'changes_needed', 'merged') THEN r.requester_id = {me}
+            WHEN r.status IN ('submitted', 'under_review') THEN EXISTS (
+                SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me} AND rr.decision = 'pending')
+            WHEN r.status = 'approved' THEN r.requester_id = {me} OR EXISTS (
+                SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me})
+            ELSE FALSE END)"
+    };
+}
+pub const MY_TURN: &str = my_turn_sql!();
+/// 自分が当事者 (申請者・レビュアー) の進行中の稟議で、相手の対応を待っているもの
+pub const THEIR_TURN: &str = concat!(
+    "r.status IN ('submitted', 'under_review', 'changes_needed', 'approved', 'merged')
+     AND (r.requester_id = {me} OR EXISTS (SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me}))
+     AND NOT ",
+    my_turn_sql!()
+);
+/// ログインユーザーの立場 (画面で「確認依頼あり / 確認待ち」などを出し分ける)
+const VIEWER_ROLE: &str = "(CASE WHEN r.requester_id = {me} THEN 'requester'
+        WHEN EXISTS (SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me}) THEN 'reviewer'
+        ELSE 'other' END)";
+
 /// 一覧のフィルター ("all" 以外) と、その条件。`{me}` はログインユーザーの ID に置き換える
-const FILTERS: [(&str, &str); 6] = [
+const FILTERS: [(&str, &str); 8] = [
+    ("my_turn", MY_TURN),
+    ("their_turn", THEIR_TURN),
     ("waiting", "r.status IN ('submitted', 'under_review')"),
     (
         "to_review",
@@ -377,6 +411,26 @@ pub async fn counts(
     b.push("COUNT(*) AS \"all\" FROM purchase_requests r WHERE r.family_id = ");
     push_scope(&mut b, &me, &q);
     Ok(Json(b.build_query_as().fetch_one(&state.db).await?))
+}
+
+/// ダッシュボード用: 自分の番 / 相手の番の件数 (絞り込みなし)
+pub async fn turn_counts(db: &sqlx::PgPool, me: &Member) -> ApiResult<(i64, i64)> {
+    let mut b = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT COUNT(*) FILTER (WHERE ");
+    push_filter(&mut b, me, MY_TURN);
+    b.push("), COUNT(*) FILTER (WHERE ");
+    push_filter(&mut b, me, THEIR_TURN);
+    b.push(") FROM purchase_requests r WHERE r.family_id = ");
+    push_scope(&mut b, me, &ListQuery::default());
+    Ok(b.build_query_as().fetch_one(db).await?)
+}
+
+/// 1 件の稟議について、次に動くのが自分か (一覧と同じ MY_TURN で判定する)
+async fn is_my_turn(db: &sqlx::PgPool, me: &Member, id: Uuid) -> ApiResult<bool> {
+    let mut b = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT ");
+    push_filter(&mut b, me, MY_TURN);
+    b.push(" FROM purchase_requests r WHERE r.id = ").push_bind(id);
+    let (mine,): (bool,) = b.build_query_as().fetch_one(db).await?;
+    Ok(mine)
 }
 
 /// 詳細。Reviewer が Submitted の申請を開いたら Under Review に進める。

@@ -183,6 +183,10 @@ pub struct RequestListItem {
     pub children: sqlx::types::Json<Vec<LinkedRequest>>,
     /// 見える分岐先の数 (children より多ければ残りは詳細画面で見る)
     pub children_count: i64,
+    /// 次に動くのがログインユーザーか (requests::MY_TURN)
+    pub my_turn: bool,
+    /// ログインユーザーの立場: requester / reviewer / other
+    pub viewer_role: String,
 }
 
 /// 一覧で、行に紐づいた稟議 (分岐元・分岐先) として出す最小限の情報
@@ -370,6 +374,8 @@ pub struct RequestDetail {
     pub previews: Vec<LinkPreview>,
     /// 申請者の家事の実績 (レビューの判断材料)
     pub requester_contributions: ContributionSummary,
+    /// 次に動くのがログインユーザーか (requests::MY_TURN)
+    pub my_turn: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -682,9 +688,9 @@ pub struct PurchaseInput {
     pub final_product_url: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct ListQuery {
-    /// all / waiting / to_review / mine / approved / purchased / closed
+    /// all / my_turn / their_turn / waiting / to_review / mine / approved / purchased / closed
     pub filter: Option<String>,
     /// 型で絞り込む (省略時はすべて)
     pub kind: Option<RequestKind>,
@@ -698,6 +704,8 @@ pub struct ListQuery {
 /// 一覧のフィルターごとの件数 (種類・ラベルの絞り込みは反映する)
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct RequestCounts {
+    pub my_turn: i64,
+    pub their_turn: i64,
     pub waiting: i64,
     pub to_review: i64,
     pub mine: i64,
@@ -721,6 +729,9 @@ pub struct Dashboard {
     pub total_requests: i64,
     pub waiting_for_review: i64,
     pub waiting_for_my_review: i64,
+    /// 次に動くのが自分の稟議 / 自分が当事者で、相手の対応を待っている稟議
+    pub my_turn: i64,
+    pub their_turn: i64,
     pub approved: i64,
     pub purchased: i64,
     /// 購入済み申請の実額合計

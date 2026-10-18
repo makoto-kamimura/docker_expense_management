@@ -7,7 +7,7 @@ import { AttachmentList, pickAndUpload } from '@/components/Attachments';
 import { Avatar, Button, C, Card, Fact, StatusBadge, s } from '@/components/ui';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
 import { LabelEditor } from '@/components/Labels';
-import { DECISION_LABEL, KIND_TEXT, statusLabel, typeOf, type Me, type RequestDetail, type RequestType } from '@/types';
+import { DECISION_LABEL, KIND_TEXT, statusLabel, typeOf, viewerRole, type Me, type RequestDetail, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
 import Markdown from '@/components/Markdown';
 
@@ -131,7 +131,7 @@ export default function RequestDetailScreen() {
       <Text style={{ fontSize: 22, color: C.fg }}>{typeOf(types, r.type_id, r.kind).icon} {r.title}</Text>
       <Text style={s.muted}>種類: {typeOf(types, r.type_id, r.kind).name}</Text>
       <Text style={{ fontSize: 24, fontWeight: '700', color: C.fg, marginVertical: 4 }}>{price}</Text>
-      <StatusBadge status={r.status} kind={r.kind} hint />
+      <StatusBadge status={r.status} kind={r.kind} hint viewer={viewerRole(d, me.id)} myTurn={d.my_turn} />
       {d.parent && (
         <Text style={[s.link, { marginTop: 6 }]} onPress={() => router.push(`/requests/${d.parent!.id}`)}>
           ⑂ 「{d.parent.title}」#{d.parent.id.slice(0, 7)} から分岐
@@ -319,7 +319,10 @@ export default function RequestDetailScreen() {
 
         {r.status === 'changes_needed' && (
           <>
-            <Text style={{ fontWeight: '700', color: C.red }}>再確認が依頼されています</Text>
+            <Text style={{ fontWeight: '700', color: C.red }}>
+              {r.requester_id === me.id ? 'レビュアーから確認依頼があります' : `${d.requester.name} の確認を待っています`}
+            </Text>
+            {r.requester_id === me.id && <Text style={s.muted}>コメントを確認して内容を更新し、再申請してください。</Text>}
             {p.can_edit && <Button title="稟議を編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
             {p.can_submit && <Button title="再度レビューを依頼" variant="primary" busy={busy} onPress={() => run('submit')} />}
             {p.can_close && <Button title="取り下げ" variant="danger" onPress={withdraw} />}

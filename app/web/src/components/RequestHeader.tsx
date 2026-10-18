@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { money, timeAgo } from '@/lib/format';
-import type { RequestDetail } from '@/lib/types';
+import { viewerRole, type RequestDetail } from '@/lib/types';
 import StatusBadge from './StatusBadge';
 import Octicon from './Octicon';
 
 /** 稟議の見出し (タイトル・状態・申請者とレビュアー・分岐元・金額)。詳細と履歴で共通 */
-export default function RequestHeader({ d, canRequest }: { d: RequestDetail; canRequest: boolean }) {
+export default function RequestHeader({ d, canRequest, meId }: { d: RequestDetail; canRequest: boolean; meId: string }) {
   const { request: r, permissions: p } = d;
   const reviewerNames = d.reviewers.map((x) => x.name).join('、');
   return (
@@ -29,7 +29,7 @@ export default function RequestHeader({ d, canRequest }: { d: RequestDetail; can
           </div>
         </div>
         <div className="detail-sub">
-          <StatusBadge status={r.status} kind={r.kind} />
+          <StatusBadge status={r.status} kind={r.kind} viewer={viewerRole(d, meId)} myTurn={d.my_turn} />
           <span>
             <strong>{d.requester.name}</strong> が
             {reviewerNames ? <> <strong>{reviewerNames}</strong> にレビューを依頼</> : ' 作成'}

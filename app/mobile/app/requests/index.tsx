@@ -139,7 +139,7 @@ export default function RequestsScreen() {
             <View style={{ flex: 1, gap: 4 }}>
               {/* 状態と金額 / タイトル / ラベル / 申請者・レビュアー・更新 */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <StatusBadge status={item.status} kind={item.kind} />
+                <StatusBadge status={item.status} kind={item.kind} viewer={item.viewer_role} myTurn={item.my_turn} />
                 <Text style={{ fontSize: 16, fontWeight: '700', color: C.fg }}>{money(item.actual_price ?? item.price, item.currency)}</Text>
               </View>
               <Text style={{ fontSize: 16, fontWeight: '600', color: C.fg }}>{typeOf(types, item.type_id, item.kind).icon} {item.title}</Text>

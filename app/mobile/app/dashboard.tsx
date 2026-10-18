@@ -23,6 +23,8 @@ export default function DashboardScreen() {
   const choreMax = Math.max(1, ...me.by_chore.map((c) => c.days));
   const max = Math.max(1, ...d.by_label.map((c) => c.total));
   const stats: [string, string | number][] = [
+    ['自分の番', d.my_turn],
+    ['相手の番', d.their_turn],
     ['稟議の数', d.total_requests],
     ['レビュー待ち', d.waiting_for_review],
     ['自分のレビュー待ち', d.waiting_for_my_review],

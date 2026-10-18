@@ -60,7 +60,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
 
   return (
     <div>
-      <RequestHeader d={d} canRequest={user.can_request} />
+      <RequestHeader d={d} canRequest={user.can_request} meId={user.id} />
       <RequestTabs id={r.id} active="conversation" d={d} />
 
       <div className="detail-grid">

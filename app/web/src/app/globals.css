@@ -283,6 +283,8 @@ input[type=checkbox], input[type=radio] { width: auto; min-height: 0; box-shadow
 .state-merged { background: var(--done); }
 .state-done { background: var(--accent-emphasis); }
 .state-closed { background: var(--closed); }
+/* 次に動くのが自分の稟議 (ボールを持っている) */
+.turn-chip { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 20px; white-space: nowrap; color: var(--attention); background: var(--attention-subtle); border: 1px solid var(--attention-border); }
 .icon-open { color: var(--open-fg); }
 .icon-draft { color: var(--muted); }
 .icon-merged { color: var(--done); }
