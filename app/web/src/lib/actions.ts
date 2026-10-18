@@ -443,3 +443,21 @@ export async function deleteRequestTypeAction(typeId: string): Promise<Result> {
   revalidatePath('/', 'layout');
   return r;
 }
+
+// ---------------------------------------------------------------------------
+// 通知
+// ---------------------------------------------------------------------------
+
+export async function markAllNotificationsReadAction() {
+  await apiFetch('/notifications/read-all', { method: 'POST' });
+  revalidatePath('/notifications');
+}
+
+/** ブラウザの PushSubscription.toJSON() を API に登録する */
+export async function savePushSubscriptionAction(sub: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<Result> {
+  return attempt(() => apiFetch('/push/subscriptions', { method: 'POST', body: JSON.stringify(sub) }));
+}
+
+export async function deletePushSubscriptionAction(endpoint: string): Promise<Result> {
+  return attempt(() => apiFetch('/push/subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) }));
+}

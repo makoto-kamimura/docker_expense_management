@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { regenerateInviteCodeAction, updateFamilyNameAction } from '@/lib/actions';
@@ -8,6 +9,7 @@ import MemberRoles from './member-roles';
 import ChoreSettings from './chore-settings';
 import RequestTypeSettings from './request-type-settings';
 import MyName from './my-name';
+import PushToggle from '@/components/PushToggle';
 
 /** Family Settings (readme.md 第7章) */
 export default async function SettingsPage() {
@@ -16,6 +18,7 @@ export default async function SettingsPage() {
   const chores = user.is_admin ? (await apiFetch<ChoresResp>('/chores')).chores : [];
   const labels = user.is_admin ? await apiFetch<Label[]>('/labels') : [];
   const types = user.is_admin ? await apiFetch<RequestType[]>('/request-types') : [];
+  const { public_key: pushKey } = await apiFetch<{ public_key: string | null }>('/push/public-key');
 
   return (
     <div style={{ maxWidth: 860 }}>
@@ -28,6 +31,16 @@ export default async function SettingsPage() {
         </div>
         <div className="box-body">
           <MyName name={user.name} />
+        </div>
+      </div>
+
+      <div className="box">
+        <div className="box-head">
+          <h2>通知</h2>
+          <Link href="/notifications" className="small">通知の一覧</Link>
+        </div>
+        <div className="box-body">
+          <PushToggle publicKey={pushKey} />
         </div>
       </div>
 

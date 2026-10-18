@@ -27,6 +27,9 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 scraper = "0.20"
 encoding_rs = "0.8"
 url = "2.5"
+# Web Push (RFC 8030 の暗号化と VAPID の署名。送信は reqwest で行う)
+web-push-native = "0.5"
+base64ct = { version = "1", features = ["alloc"] }
 
 [profile.release]
 opt-level = 3

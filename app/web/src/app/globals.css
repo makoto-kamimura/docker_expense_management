@@ -284,6 +284,19 @@ input[type=checkbox], input[type=radio] { width: auto; min-height: 0; box-shadow
 .state-done { background: var(--accent-emphasis); }
 .state-closed { background: var(--closed); }
 /* 次に動くのが自分の稟議 (ボールを持っている) */
+/* ヘッダーの通知 (未読があれば数を出す) */
+.bell { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); }
+.who a.bell { color: var(--muted); }
+.who a.bell.bell-on { color: var(--fg); }
+.bell:hover { text-decoration: none; background: var(--subtle); }
+.bell-count { position: absolute; top: -6px; right: -6px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent-emphasis); color: #fff; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; }
+/* 通知の一覧 */
+.notif-row { display: flex; align-items: flex-start; gap: 12px; color: var(--fg); }
+.notif-row:hover { text-decoration: none; background: var(--subtle); }
+.notif-row > svg { margin-top: 3px; color: var(--muted); }
+.notif-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.notif-unread { background: var(--accent-subtle); }
+.notif-unread > svg { color: var(--accent); }
 .turn-chip { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 20px; white-space: nowrap; color: var(--attention); background: var(--attention-subtle); border: 1px solid var(--attention-border); }
 .icon-open { color: var(--open-fg); }
 .icon-draft { color: var(--muted); }
@@ -654,7 +667,9 @@ a.label-chip:hover { text-decoration: none; filter: brightness(0.95); }
 .chore-total { font-size: 13px; font-variant-numeric: tabular-nums; }
 /* 表示 (端末に合わせる / ライト / ダーク) の切り替え */
 .theme-switch { width: auto; min-height: 28px; height: 28px; padding: 0 8px; font-size: 12px; }
-@media (max-width: 600px) { .who .muted { display: none; } }
+/* スマホでは名前・アイコン・グループ名を隠し、ヘッダーが折り返さないようにする */
+@media (max-width: 600px) { .who .muted, .who .avatar, .crumb-family { display: none; } .who { gap: 6px; } }
+@media (max-width: 420px) { .crumbs { display: none; } }
 /* 一覧: 紐づいた稟議 (分岐元・分岐先) の折りたたみ */
 .req-links { margin-top: 6px; font-size: 12px; }
 .req-links > summary { cursor: pointer; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; list-style: none; }

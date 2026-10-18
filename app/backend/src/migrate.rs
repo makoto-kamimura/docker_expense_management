@@ -296,6 +296,37 @@ UPDATE labels l SET name = v.new_name, description = v.new_desc
  WHERE l.name = v.old_name AND l.description = v.old_desc
    AND NOT EXISTS (SELECT 1 FROM labels o WHERE o.family_id = l.family_id AND lower(o.name) = lower(v.new_name));
 
+-- 通知 (稟議のボールが来たことを知らせる)。アプリ内の一覧に出し、購読している端末には Web Push でも送る
+CREATE TABLE IF NOT EXISTS notifications (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    request_id UUID NOT NULL REFERENCES purchase_requests(id) ON DELETE CASCADE,
+    actor_id   UUID REFERENCES users(id) ON DELETE SET NULL,
+    kind       TEXT NOT NULL,           -- review_requested / resubmitted / reopened / changes_requested / approved / rejected / merged
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    read_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, request_id) WHERE read_at IS NULL;
+
+-- Web Push の購読先 (ブラウザごと)。endpoint はプッシュサービスの URL で、端末ごとに一意
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint   TEXT NOT NULL UNIQUE,
+    p256dh     TEXT NOT NULL,
+    auth       TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
+
+-- サーバーが作って保存する鍵 (VAPID_PRIVATE_KEY を指定しないときの Web Push の鍵など)
+CREATE TABLE IF NOT EXISTS server_keys (
+    name       TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE OR REPLACE TRIGGER trg_families_updated_at BEFORE UPDATE ON families
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE OR REPLACE TRIGGER trg_users_updated_at BEFORE UPDATE ON users

@@ -36,6 +36,7 @@ export default function RootLayout() {
         <Stack.Screen name="summary/[id]" options={{ title: 'まとめ資料' }} />
         <Stack.Screen name="account" options={{ title: 'アカウント' }} />
         <Stack.Screen name="dashboard" options={{ title: 'ダッシュボード' }} />
+        <Stack.Screen name="notifications" options={{ title: '通知' }} />
         <Stack.Screen name="chores/index" options={{ title: 'マイページ' }} />
         <Stack.Screen name="chores/[id]" options={{ title: 'きれいな状態の見本' }} />
       </Stack>

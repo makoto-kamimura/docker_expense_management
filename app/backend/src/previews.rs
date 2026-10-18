@@ -204,7 +204,7 @@ fn is_public_v4(ip: Ipv4Addr) -> bool {
 }
 
 /// URL を検査し、接続してよいアドレスを 1 つ返す
-async fn resolve_public(url: &Url) -> anyhow::Result<SocketAddr> {
+pub(crate) async fn resolve_public(url: &Url) -> anyhow::Result<SocketAddr> {
     if !matches!(url.scheme(), "http" | "https") {
         bail!("scheme not allowed");
     }

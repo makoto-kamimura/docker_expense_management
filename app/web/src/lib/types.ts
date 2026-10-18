@@ -708,3 +708,34 @@ export function labelTextColor(color: string): string {
   // 相対輝度 (sRGB の近似) が明るければ黒文字
   return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#1f2328' : '#ffffff';
 }
+
+// ---------------------------------------------------------------------------
+// 通知
+// ---------------------------------------------------------------------------
+
+export type NotificationKind =
+  | 'review_requested'
+  | 'resubmitted'
+  | 'reopened'
+  | 'changes_requested'
+  | 'approved'
+  | 'rejected'
+  | 'merged';
+
+/** 自分宛ての通知 (GET /notifications) */
+export interface NotificationItem {
+  id: string;
+  kind: NotificationKind;
+  /** 画面に出す文面 (例: 「ママ から確認の依頼があります」) */
+  message: string;
+  request_id: string;
+  request_title: string;
+  actor_name: string | null;
+  created_at: string;
+  read_at: string | null;
+}
+
+export interface NotificationList {
+  unread: number;
+  items: NotificationItem[];
+}

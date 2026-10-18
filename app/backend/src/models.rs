@@ -739,3 +739,45 @@ pub struct Dashboard {
     /// ラベル別の支出 (複数のラベルが付いた稟議は、それぞれのラベルに数える)
     pub by_label: Vec<LabelTotal>,
 }
+
+// ---------------------------------------------------------------------------
+// 通知
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+pub struct NotificationItem {
+    pub id: Uuid,
+    /// review_requested / resubmitted / reopened / changes_requested / approved / rejected / merged
+    pub kind: String,
+    /// 画面に出す文面 (例: 「ママ から確認の依頼があります」)
+    pub message: String,
+    pub request_id: Uuid,
+    pub request_title: String,
+    pub actor_name: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub read_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct NotificationList {
+    pub unread: i64,
+    pub items: Vec<NotificationItem>,
+}
+
+/// ブラウザの PushSubscription.toJSON() の形
+#[derive(Debug, Deserialize)]
+pub struct PushSubscriptionInput {
+    pub endpoint: String,
+    pub keys: PushKeys,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PushKeys {
+    pub p256dh: String,
+    pub auth: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PushUnsubscribeInput {
+    pub endpoint: String,
+}
