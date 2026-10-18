@@ -21,10 +21,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const user = await getCurrentUser();
   // 表示の設定はサーバー側で html に付けて、読み込み時に色が切り替わって見えないようにする
   const theme = parseTheme(cookies().get(THEME_COOKIE)?.value);
-  // 自分がレビューすべき申請の件数 (Review タブのバッジ)
-  const toReview = user
-    ? (await apiFetch<RequestListItem[]>('/requests?filter=to_review').catch(() => [])).length
-    : 0;
+  // 自分がレビューすべき申請の件数 (Review タブのバッジ) と、未読の通知の数 (ベル)
+  const [toReview, unread] = user
+    ? await Promise.all([
+        apiFetch<RequestListItem[]>('/requests?filter=to_review').then((x) => x.length).catch(() => 0),
+        apiFetch<{ unread: number }>('/notifications/unread-count').then((x) => x.unread).catch(() => 0),
+      ])
+    : [0, 0];
 
   return (
     <html lang="ja" data-theme={theme === 'system' ? undefined : theme}>
@@ -37,10 +40,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </a>
               <div className="crumbs">
                 {user && (
-                  <>
+                  <span className="crumb-family">
                     <a href="/settings" style={{ color: 'inherit' }}>{user.family.name}</a>
-                    <span className="sep">/</span>
-                  </>
+                    <span className="sep"> / </span>
+                  </span>
                 )}
                 <a href="/" style={{ color: 'inherit' }}><strong>RingiWoMerge</strong></a>
               </div>
@@ -48,6 +51,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <ThemeSwitch initial={theme} />
                 {user ? (
                   <>
+                    <a
+                      href="/notifications"
+                      className={`bell${unread ? ' bell-on' : ''}`}
+                      aria-label={unread ? `通知 (未読 ${unread}件)` : '通知'}
+                      title="通知"
+                    >
+                      <Octicon name="bell" />
+                      {unread > 0 && <span className="bell-count">{unread > 99 ? '99+' : unread}</span>}
+                    </a>
                     <Avatar name={user.name} />
                     <span className="muted">{user.name}</span>
                     <form action={logoutAction}>

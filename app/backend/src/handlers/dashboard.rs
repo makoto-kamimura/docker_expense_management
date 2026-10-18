@@ -3,6 +3,7 @@ use axum::{extract::State, Json};
 use crate::{
     auth::AuthUser,
     error::ApiResult,
+    handlers::requests,
     models::{Dashboard, Label, LabelTotal},
     state::AppState,
 };
@@ -27,6 +28,7 @@ pub async fn get(State(state): State<AppState>, AuthUser(me): AuthUser) -> ApiRe
     .bind(me.id)
     .fetch_one(&state.db)
     .await?;
+    let (my_turn, their_turn) = requests::turn_counts(&state.db, &me).await?;
     type Row = (uuid::Uuid, String, String, String, i64, i64);
     let rows: Vec<Row> = sqlx::query_as(
         "SELECT l.id, l.name, l.color, l.description,
@@ -65,6 +67,8 @@ pub async fn get(State(state): State<AppState>, AuthUser(me): AuthUser) -> ApiRe
         total_requests: total,
         waiting_for_review: waiting,
         waiting_for_my_review: mine,
+        my_turn,
+        their_turn,
         approved,
         purchased,
         total_spending: spending,

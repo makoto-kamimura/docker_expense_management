@@ -10,6 +10,8 @@ import StatusBadge from '@/components/StatusBadge';
 import { Thumb } from '@/components/LinkCard';
 
 const EMPTY_TEXT: Record<FilterKey, string> = {
+  my_turn: 'あなたが対応する稟議はありません 🎉',
+  their_turn: '相手の対応を待っている稟議はありません',
   all: 'まだ稟議がありません',
   waiting: 'レビュー待ちの稟議はありません',
   to_review: 'あなたのレビュー待ちはありません 🎉',
@@ -106,7 +108,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
             <div key={r.id} className="req-item">
               <div className="req-main">
                 <div className="req-head">
-                  <StatusBadge status={r.status} kind={r.kind} small />
+                  <StatusBadge status={r.status} kind={r.kind} small viewer={r.viewer_role} myTurn={r.my_turn} />
                   <Link href={`/requests/${r.id}`} className="req-title">{r.title}</Link>
                 </div>
                 <div className="req-tags">

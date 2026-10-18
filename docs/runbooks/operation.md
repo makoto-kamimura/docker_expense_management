@@ -119,6 +119,8 @@ docker compose logs -f web      # Web のみ
 | `JWT_SECRET` | (要置換) | JWT 署名鍵。**本番では 32 文字以上のランダム値に必ず変更すること。** |
 | `API_URL` | `http://backend:8080` | Web → Backend の内部通信先 |
 | `RUST_LOG` | `info,sqlx=warn` | Rust ログレベル |
+| `VAPID_PRIVATE_KEY` | (なし) | Web Push の VAPID 秘密鍵 (P-256 の秘密鍵 32 バイトを base64url)。未指定なら API が初回起動時に作り、DB の `server_keys` に保存して使い続ける |
+| `VAPID_SUBJECT` | `mailto:admin@example.com` | VAPID の連絡先 (`mailto:` か `https:`)。プッシュサービスが送信元に連絡するときに使う。本番では運用者の連絡先にする |
 
 ## 6. デプロイ (本番想定)
 
@@ -154,6 +156,13 @@ Web のサーバサイドからは Docker DNS で `http://backend:8080` を解�
 - iOS Simulator: `EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start`。
 - Android Emulator: `http://10.0.2.2:8082` を指定。
 - 実機: 端末から届く URL が必要 (Compose の API は 127.0.0.1 のみ公開なので、ポートの公開範囲を変えるか、公開デモの `https://expense.makoto-kamimura.com/api` を使う)。
+
+### Web Push の通知が届かない
+
+- 通知の画面 (`/notifications`) の「この端末への通知」に理由が出る。https (または `localhost`) で開いているか、ブラウザでこのサイトの通知が許可されているかを確認する。iPhone・iPad はホーム画面に追加したアプリから開く必要がある。
+- `docker compose logs backend | grep "web push"` で送信のエラーを確認する。起動時に `web push is disabled` が出ていれば、`VAPID_PRIVATE_KEY` が読めていない。
+- VAPID の鍵を変えると (`VAPID_PRIVATE_KEY` の変更や `server_keys` の削除)、それまでの購読はすべて届かなくなる。各端末で「通知を止める」→「この端末で通知を受け取る」をやり直す。
+- 購読の一覧: `SELECT u.email, s.endpoint, s.created_at FROM push_subscriptions s JOIN users u ON u.id = s.user_id;`
 
 ### マイグレーション (スキーマ変更) を行いたい
 

@@ -5,6 +5,7 @@ mod handlers;
 mod migrate;
 mod models;
 mod previews;
+mod push;
 mod seed;
 mod state;
 
@@ -30,9 +31,13 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cfg = Config::from_env()?;
-    let state = AppState::new(cfg.clone()).await?;
+    let mut state = AppState::new(cfg.clone()).await?;
 
     migrate::run(&state.db).await?;
+    match push::load_vapid(&state.db, cfg.vapid_private_key.as_deref(), &cfg.vapid_subject).await {
+        Ok(v) => state.vapid = Some(std::sync::Arc::new(v)),
+        Err(e) => tracing::warn!("web push is disabled: {e:#}"),
+    }
     seed::seed(&state).await?;
     // 既存の稟議の URL のプレビューをバックグラウンドで取得する
     previews::backfill(&state).await?;
@@ -69,6 +74,15 @@ async fn main() -> anyhow::Result<()> {
                 .delete(handlers::chores::delete_image),
         )
         .route("/dashboard", get(handlers::dashboard::get))
+        .route("/notifications", get(handlers::notifications::list))
+        .route("/notifications/unread-count", get(handlers::notifications::unread))
+        .route("/notifications/read-all", post(handlers::notifications::read_all))
+        .route("/notifications/:id/read", post(handlers::notifications::read_one))
+        .route("/push/public-key", get(handlers::notifications::public_key))
+        .route(
+            "/push/subscriptions",
+            post(handlers::notifications::subscribe).delete(handlers::notifications::unsubscribe),
+        )
         .route("/requests", get(handlers::requests::list).post(handlers::requests::create))
         .route("/requests/counts", get(handlers::requests::counts))
         .route(

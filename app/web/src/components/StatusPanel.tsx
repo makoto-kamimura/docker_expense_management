@@ -138,7 +138,12 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
   // ---- Changes needed ----
   if (r.status === 'changes_needed') {
     return (
-      <Panel icon="redo" color="red" title="再確認が依頼されています" sub="アクティビティのコメントを確認して、内容を更新してください。">
+      <Panel
+        icon="redo"
+        color="red"
+        title={isRequester ? 'レビュアーから確認依頼があります' : `${detail.requester.name} の確認を待っています`}
+        sub={isRequester ? 'アクティビティのコメントを確認して、内容を更新してから再申請してください。' : '申請者が内容を見直して再申請すると、もう一度レビューできます。'}
+      >
         {errorBox}
         <div className="actions">
           {p.can_edit && <Link className="btn" href={`/requests/${r.id}/edit`}>稟議を編集</Link>}

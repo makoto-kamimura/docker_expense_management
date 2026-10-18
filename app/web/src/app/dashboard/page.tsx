@@ -1,15 +1,23 @@
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { requireUser } from '@/lib/session';
-import { money } from '@/lib/format';
-import type { ChoresResp, Dashboard } from '@/lib/types';
+import { money, timeAgo } from '@/lib/format';
+import type { ChoresResp, Dashboard, RequestListItem } from '@/lib/types';
 import LabelChip from '@/components/LabelChip';
+import StatusBadge from '@/components/StatusBadge';
 import ChoreBadges from '@/components/ChoreBadges';
 import ContributionGraph from '@/components/ContributionGraph';
 
+/** 「あなたの対応が必要な稟議」に出す件数 */
+const MY_TURN_LIMIT = 5;
+
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [d, chores] = await Promise.all([apiFetch<Dashboard>('/dashboard'), apiFetch<ChoresResp>('/chores')]);
+  const [d, chores, myTurn] = await Promise.all([
+    apiFetch<Dashboard>('/dashboard'),
+    apiFetch<ChoresResp>('/chores'),
+    apiFetch<RequestListItem[]>('/requests?filter=my_turn'),
+  ]);
   const max = Math.max(1, ...d.by_label.map((c) => c.total));
   const me = chores.me;
   const choreMax = Math.max(1, ...me.by_chore.map((c) => c.days));
@@ -18,12 +26,32 @@ export default async function DashboardPage() {
     <div>
       <h1>ダッシュボード <span className="ja">家庭内の購入状況</span></h1>
       <div className="stats">
+        <Stat k="自分の番" v={d.my_turn} href="/requests?filter=my_turn" />
+        <Stat k="相手の番" v={d.their_turn} href="/requests?filter=their_turn" />
         <Stat k="稟議の数" v={d.total_requests} href="/requests?filter=all" />
         <Stat k="レビュー待ち" v={d.waiting_for_review} href="/requests?filter=waiting" />
         <Stat k="自分のレビュー待ち" v={d.waiting_for_my_review} href="/requests?filter=to_review" />
         <Stat k="承認済み (購入前)" v={d.approved} href="/requests?filter=approved" />
         <Stat k="完了 (購入・お出かけ)" v={d.purchased} href="/requests?filter=purchased" />
         <Stat k="支出の合計" v={money(d.total_spending, d.currency)} />
+      </div>
+
+      <div className="box">
+        <div className="box-head">
+          <h2>あなたの対応が必要な稟議 <span className="ja">ボールを持っている稟議</span></h2>
+          {myTurn.length > MY_TURN_LIMIT && <Link href="/requests?filter=my_turn" className="small">すべて見る ({myTurn.length}件)</Link>}
+        </div>
+        {myTurn.length === 0 ? (
+          <div className="box-body"><p className="muted" style={{ margin: 0 }}>今あなたが対応する稟議はありません 🎉</p></div>
+        ) : (
+          myTurn.slice(0, MY_TURN_LIMIT).map((r) => (
+            <div key={r.id} className="box-row" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <StatusBadge status={r.status} kind={r.kind} small viewer={r.viewer_role} />
+              <Link href={`/requests/${r.id}`} style={{ fontWeight: 600 }}>{r.title}</Link>
+              <span className="muted small" style={{ marginLeft: 'auto' }}>{r.requester_name} の申請 · {timeAgo(r.updated_at)}に更新</span>
+            </div>
+          ))
+        )}
       </div>
 
       <div className="box">

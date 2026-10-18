@@ -4,7 +4,7 @@ import { STATUS_GROUP } from '@/lib/types';
 /** GitHub の Octicons 風の 16px アイコン (線画で自作) */
 export type IconName =
   | 'pr' | 'pr-draft' | 'merge' | 'pr-closed' | 'bag' | 'check' | 'x' | 'comment'
-  | 'eye' | 'pencil' | 'arrow' | 'paperclip' | 'dot' | 'redo' | 'branch' | 'history' | 'tag';
+  | 'eye' | 'pencil' | 'arrow' | 'paperclip' | 'dot' | 'redo' | 'branch' | 'history' | 'tag' | 'bell';
 
 export default function Octicon({ name, size = 16, className }: { name: IconName; size?: number; className?: string }) {
   const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -40,6 +40,8 @@ export default function Octicon({ name, size = 16, className }: { name: IconName
         return (<><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v2.5H5" {...p} /><path d="M8 5v3l2 1.5" {...p} /></>);
       case 'branch':
         return (<><circle cx="4" cy="3.5" r="1.75" {...p} /><circle cx="4" cy="12.5" r="1.75" {...p} /><circle cx="12" cy="4.5" r="1.75" {...p} /><path d="M4 5.25v5.5M12 6.25c0 3-2.5 4-7.2 5.2" {...p} /></>);
+      case 'bell':
+        return (<><path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1.25 1.25H2.75z" {...p} /><path d="M6.5 13.5a1.5 1.5 0 0 0 3 0" {...p} /></>);
       case 'redo':
         return <path d="M12.5 5.5H6a3.5 3.5 0 0 0 0 7h4M10 3l2.5 2.5L10 8" {...p} />;
       case 'dot':

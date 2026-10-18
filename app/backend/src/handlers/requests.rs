@@ -9,8 +9,13 @@ use uuid::Uuid;
 use crate::{
     auth::AuthUser,
     error::{ApiError, ApiResult},
-    handlers::{chores, labels::{labels_of, replace_labels}, request_types},
-    previews,
+    handlers::{
+        chores,
+        labels::{labels_of, replace_labels},
+        notifications::{self, notify, Notify},
+        request_types,
+    },
+    previews, push,
     models::{
         ActionInput, LinkPreview, RequestCategory, AlternativeInput, AlternativeProduct, Attachment, CommentInput, ListQuery,
         Member, Permissions, PurchaseInput, PurchaseRequest, RequestDetail, RequestInput, RequestKind,
@@ -42,6 +47,10 @@ pub async fn load_request(state: &AppState, me: &Member, id: Uuid) -> ApiResult<
         return Err(ApiError::NotFound);
     }
     Ok(req)
+}
+
+fn reviewer_ids(reviewers: &[Reviewer]) -> Vec<Uuid> {
+    reviewers.iter().map(|r| r.id).collect()
 }
 
 pub async fn reviewers_of(state: &AppState, request_id: Uuid) -> ApiResult<Vec<Reviewer>> {
@@ -230,7 +239,9 @@ async fn build_detail(state: &AppState, me: &Member, request: PurchaseRequest) -
     .await?;
     let requester_contributions = chores::contributions(&state.db, request.family_id, request.requester_id).await?;
     let labels = labels_of(state, id).await?;
+    let my_turn = is_my_turn(&state.db, me, id).await?;
     Ok(RequestDetail {
+        my_turn,
         labels,
         requester_contributions,
         previews,
@@ -296,8 +307,12 @@ pub async fn list(
     );
     b.push_bind(me.id).push(") ORDER BY p.created_at LIMIT ").push(LINKED_CHILDREN_LIMIT.to_string());
     b.push(") x), '[]'::json) AS children, (SELECT COUNT(*) FROM purchase_requests p WHERE p.parent_id = r.id AND (p.status <> 'draft' OR p.requester_id = ");
-    b.push_bind(me.id).push(
-        ")) AS children_count
+    b.push_bind(me.id).push(")) AS children_count, ");
+    push_filter(&mut b, &me, MY_TURN);
+    b.push(" AS my_turn, ");
+    push_filter(&mut b, &me, VIEWER_ROLE);
+    b.push(
+        " AS viewer_role
            FROM purchase_requests r JOIN users u ON u.id = r.requester_id
           WHERE r.family_id = ",
     );
@@ -312,18 +327,46 @@ pub async fn list(
             None => return Err(ApiError::BadRequest(format!("unknown filter: {key}"))),
         },
     }
-    // 進行中 → 承認済み → 完了 → クローズの順。同じ段階の中は更新が新しい順
+    // 進行中 → 承認済み → 完了 → クローズの順。同じ段階の中は自分の番を先に、更新が新しい順
     b.push(
         " ORDER BY CASE WHEN r.status IN ('approved', 'merged') THEN 1
                         WHEN r.status = 'purchased' THEN 2
                         WHEN r.status = 'closed' THEN 3
-                        ELSE 0 END, r.updated_at DESC",
+                        ELSE 0 END, my_turn DESC, r.updated_at DESC",
     );
     Ok(Json(b.build_query_as().fetch_all(&state.db).await?))
 }
 
+/// 次に動くのが自分か (ボールを持っているか)。`{me}` はログインユーザーの ID に置き換える。
+/// レビュー待ち = まだ判定していないレビュアー / 再確認の依頼・下書き・マージ済み = 申請者 / 承認済み = マージできる当事者
+macro_rules! my_turn_sql {
+    () => {
+        "(CASE
+            WHEN r.status IN ('draft', 'changes_needed', 'merged') THEN r.requester_id = {me}
+            WHEN r.status IN ('submitted', 'under_review') THEN EXISTS (
+                SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me} AND rr.decision = 'pending')
+            WHEN r.status = 'approved' THEN r.requester_id = {me} OR EXISTS (
+                SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me})
+            ELSE FALSE END)"
+    };
+}
+pub const MY_TURN: &str = my_turn_sql!();
+/// 自分が当事者 (申請者・レビュアー) の進行中の稟議で、相手の対応を待っているもの
+pub const THEIR_TURN: &str = concat!(
+    "r.status IN ('submitted', 'under_review', 'changes_needed', 'approved', 'merged')
+     AND (r.requester_id = {me} OR EXISTS (SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me}))
+     AND NOT ",
+    my_turn_sql!()
+);
+/// ログインユーザーの立場 (画面で「確認依頼あり / 確認待ち」などを出し分ける)
+const VIEWER_ROLE: &str = "(CASE WHEN r.requester_id = {me} THEN 'requester'
+        WHEN EXISTS (SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me}) THEN 'reviewer'
+        ELSE 'other' END)";
+
 /// 一覧のフィルター ("all" 以外) と、その条件。`{me}` はログインユーザーの ID に置き換える
-const FILTERS: [(&str, &str); 6] = [
+const FILTERS: [(&str, &str); 8] = [
+    ("my_turn", MY_TURN),
+    ("their_turn", THEIR_TURN),
     ("waiting", "r.status IN ('submitted', 'under_review')"),
     (
         "to_review",
@@ -379,6 +422,26 @@ pub async fn counts(
     Ok(Json(b.build_query_as().fetch_one(&state.db).await?))
 }
 
+/// ダッシュボード用: 自分の番 / 相手の番の件数 (絞り込みなし)
+pub async fn turn_counts(db: &sqlx::PgPool, me: &Member) -> ApiResult<(i64, i64)> {
+    let mut b = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT COUNT(*) FILTER (WHERE ");
+    push_filter(&mut b, me, MY_TURN);
+    b.push("), COUNT(*) FILTER (WHERE ");
+    push_filter(&mut b, me, THEIR_TURN);
+    b.push(") FROM purchase_requests r WHERE r.family_id = ");
+    push_scope(&mut b, me, &ListQuery::default());
+    Ok(b.build_query_as().fetch_one(db).await?)
+}
+
+/// 1 件の稟議について、次に動くのが自分か (一覧と同じ MY_TURN で判定する)
+async fn is_my_turn(db: &sqlx::PgPool, me: &Member, id: Uuid) -> ApiResult<bool> {
+    let mut b = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT ");
+    push_filter(&mut b, me, MY_TURN);
+    b.push(" FROM purchase_requests r WHERE r.id = ").push_bind(id);
+    let (mine,): (bool,) = b.build_query_as().fetch_one(db).await?;
+    Ok(mine)
+}
+
 /// 詳細。Reviewer が Submitted の申請を開いたら Under Review に進める。
 pub async fn get_one(
     State(state): State<AppState>,
@@ -403,6 +466,7 @@ pub async fn get_one(
             request = load_request(&state, &me, id).await?;
         }
     }
+    notifications::mark_request_read(&state, me.id, id).await?;
     Ok(Json(build_detail(&state, &me, request).await?))
 }
 
@@ -681,6 +745,8 @@ pub async fn submit(
         .execute(&mut *tx)
         .await?;
     log_activity(&mut *tx, id, me.id, action, snapshot).await?;
+    let kind = if action == "resubmitted" { Notify::Resubmitted } else { Notify::ReviewRequested };
+    let sent = notify(&mut tx, id, me.id, kind, req.requester_id, &reviewer_ids(&reviewers)).await?;
     // 分岐した稟議を初めて申請したら、分岐元のアクティビティにも残す
     if let (Some(pid), "submitted") = (req.parent_id, action) {
         let already: (bool,) = sqlx::query_as(
@@ -696,6 +762,7 @@ pub async fn submit(
         }
     }
     tx.commit().await?;
+    push::deliver(&state, sent);
     detail_json(&state, &me, id).await
 }
 
@@ -723,21 +790,24 @@ async fn review(state: &AppState, me: &Member, id: Uuid, kind: Review, input: Ac
     if matches!(kind, Review::RequestChanges) && comment.is_none() {
         return Err(ApiError::BadRequest("再確認してほしい内容をコメントに書いてください".into()));
     }
-    let (status_sql, decision, action) = match kind {
+    let (status_sql, decision, action, notice) = match kind {
         Review::Approve => (
             "UPDATE purchase_requests SET status = 'approved', approved_at = now() WHERE id = $1",
             ReviewerDecision::Approved,
             "approved",
+            Notify::Approved,
         ),
         Review::RequestChanges => (
             "UPDATE purchase_requests SET status = 'changes_needed' WHERE id = $1",
             ReviewerDecision::ChangesRequested,
             "changes_requested",
+            Notify::ChangesRequested,
         ),
         Review::Reject => (
             "UPDATE purchase_requests SET status = 'closed', closed_at = now(), close_reason = 'rejected' WHERE id = $1",
             ReviewerDecision::Rejected,
             "rejected",
+            Notify::Rejected,
         ),
     };
 
@@ -755,7 +825,9 @@ async fn review(state: &AppState, me: &Member, id: Uuid, kind: Review, input: Ac
     if let Some(body) = &comment {
         add_comment(&mut tx, id, me.id, body).await?;
     }
+    let sent = notify(&mut tx, id, me.id, notice, req.requester_id, &reviewer_ids(&reviewers)).await?;
     tx.commit().await?;
+    push::deliver(state, sent);
     detail_json(state, me, id).await
 }
 
@@ -805,7 +877,9 @@ pub async fn merge(
         .execute(&mut *tx)
         .await?;
     log_activity(&mut *tx, id, me.id, "merged", json!({})).await?;
+    let sent = notify(&mut tx, id, me.id, Notify::Merged, req.requester_id, &reviewer_ids(&reviewers)).await?;
     tx.commit().await?;
+    push::deliver(&state, sent);
     detail_json(&state, &me, id).await
 }
 
@@ -921,7 +995,9 @@ pub async fn reopen(
     if let Some(body) = &comment {
         add_comment(&mut tx, id, me.id, body).await?;
     }
+    let sent = notify(&mut tx, id, me.id, Notify::Reopened, req.requester_id, &reviewer_ids(&reviewers)).await?;
     tx.commit().await?;
+    push::deliver(&state, sent);
     detail_json(&state, &me, id).await
 }
 

@@ -5,6 +5,7 @@ import { apiFetch, clearToken, getToken, linkPreviewUrl } from '@/api';
 import { money, timeAgo } from '@/format';
 import { Button, C, s, StatusBadge, statusColor } from '@/components/ui';
 import { LabelList } from '@/components/Labels';
+import { NotificationButton } from '@/components/NotificationButton';
 import { DEFAULT_FILTER, FILTERS, statusLabel, typeOf, type FilterKey, type LinkedRequest, type Me, type RequestCounts, type RequestListItem, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
 
@@ -76,6 +77,7 @@ export default function RequestsScreen() {
         <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
           <Button title="ダッシュボード" size="sm" onPress={() => router.push('/dashboard')} />
           <Button title="マイページ" size="sm" onPress={() => router.push('/chores')} />
+          <NotificationButton />
           {me?.can_request && (
             // 種類はフォームで選ぶ (絞り込み中の種類があれば初期値にする)
             <Button
@@ -139,7 +141,7 @@ export default function RequestsScreen() {
             <View style={{ flex: 1, gap: 4 }}>
               {/* 状態と金額 / タイトル / ラベル / 申請者・レビュアー・更新 */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <StatusBadge status={item.status} kind={item.kind} />
+                <StatusBadge status={item.status} kind={item.kind} viewer={item.viewer_role} myTurn={item.my_turn} />
                 <Text style={{ fontSize: 16, fontWeight: '700', color: C.fg }}>{money(item.actual_price ?? item.price, item.currency)}</Text>
               </View>
               <Text style={{ fontSize: 16, fontWeight: '600', color: C.fg }}>{typeOf(types, item.type_id, item.kind).icon} {item.title}</Text>

@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, TextInput
 import { router, useFocusEffect } from 'expo-router';
 import { apiFetch, choreImageUrl, getToken } from '@/api';
 import { Avatar, Button, C, Card, s } from '@/components/ui';
+import { NotificationButton } from '@/components/NotificationButton';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
 import { CHORE_PERIOD_TABS, choreScheduleLabel, choreTimeTotalLabel, filterByPeriod, periodProgressLabel, type ChorePeriodTab } from '@/format';
 import type { ChoresResp, ChoreStatus, PushStatus } from '@/types';
@@ -92,6 +93,7 @@ export default function ChoresScreen() {
       <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
         <Button title="稟議" size="sm" onPress={() => router.push('/requests')} />
         <Button title="ダッシュボード" size="sm" onPress={() => router.push('/dashboard')} />
+        <NotificationButton />
         {/* 表示: 自動 (端末に合わせる) → ライト → ダーク */}
         <Button title={`表示: ${THEME_LABEL[theme]}`} size="sm" onPress={() => setThemeMode(NEXT_THEME[theme])} />
       </View>
