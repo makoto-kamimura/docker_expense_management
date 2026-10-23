@@ -108,7 +108,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
             <div key={r.id} className="req-item">
               <div className="req-main">
                 <div className="req-head">
-                  <StatusBadge status={r.status} kind={r.kind} small viewer={r.viewer_role} myTurn={r.my_turn} />
+                  <StatusBadge status={r.status} kind={r.kind} small viewer={r.viewer_role} myTurn={r.my_turn} asked={r.asked_to_reply} />
                   <Link href={`/requests/${r.id}`} className="req-title">{r.title}</Link>
                 </div>
                 <div className="req-tags">
@@ -118,6 +118,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
                 <div className="req-meta">
                   #{shortId(r.id)} · {r.requester_name} の申請
                   {r.reviewer_names.length > 0 && <> · レビュアー: {r.reviewer_names.join('、')}</>}
+                  {r.assignee_name && <> · 担当: {r.assignee_name}</>}
                   {' '}· {timeAgo(r.updated_at)}に更新
                 </div>
                 <LinkedRequests r={r} types={types} />

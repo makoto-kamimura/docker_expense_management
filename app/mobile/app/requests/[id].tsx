@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Image, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { apiFetch, getToken, linkPreviewUrl } from '@/api';
 import { checkpoints, dateRange, describeEvent, hostOf, money, timeAgo } from '@/format';
@@ -7,7 +7,10 @@ import { AttachmentList, pickAndUpload } from '@/components/Attachments';
 import { Avatar, Button, C, Card, Fact, StatusBadge, s } from '@/components/ui';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
 import { LabelEditor } from '@/components/Labels';
-import { DECISION_LABEL, KIND_TEXT, statusLabel, typeOf, viewerRole, type Me, type RequestDetail, type RequestType } from '@/types';
+import { AssigneeEditor } from '@/components/Assignee';
+import { FlowSteps } from '@/components/Flow';
+import { AskLine, AskPicker, ReplyBanner } from '@/components/Asks';
+import { DECISION_LABEL, KIND_TEXT, actorOf, statusLabel, typeOf, viewerRole, type Me, type Member, type RequestDetail, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
 import Markdown from '@/components/Markdown';
 
@@ -21,28 +24,47 @@ export default function RequestDetailScreen() {
   const [types, setTypes] = useState<RequestType[]>([]);
   const [token, setTokenState] = useState<string | null>(null);
   const [comment, setComment] = useState('');
+  // コメントで返事をお願いする相手 (ボールを渡す)。候補はグループのメンバー
+  const [asks, setAsks] = useState<string[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   // 承認後の再オープンに添える「済んでいないこと」(下のコメント欄とは別に持つ)
   const [reopenNote, setReopenNote] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  // quiet = 自動の読み直し (失敗してもダイアログを出さない)
+  const load = useCallback(async (quiet = false) => {
     try {
-      const [detail, self, tk, typeList] = await Promise.all([
+      const [detail, self, tk, typeList, memberList] = await Promise.all([
         apiFetch<RequestDetail>(`/requests/${id}`),
         apiFetch<Me>('/me'),
         getToken(),
         apiFetch<RequestType[]>('/request-types'),
+        apiFetch<Member[]>('/family/members'),
       ]);
       setD(detail);
       setTypes(typeList);
       setMe(self);
       setTokenState(tk);
+      setMembers(memberList);
     } catch (e) {
-      Alert.alert('読み込めませんでした', (e as Error).message);
+      if (!quiet) Alert.alert('読み込めませんでした', (e as Error).message);
     }
   }, [id]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // 開いている間は 15 秒ごとと、アプリに戻ったときに読み直して、相手のコメントや操作を出す (入力中の文章はそのまま)
+  useFocusEffect(useCallback(() => {
+    load();
+    const timer = setInterval(() => {
+      if (AppState.currentState === 'active') load(true);
+    }, 15_000);
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') load(true);
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+  }, [load]));
 
   if (!d || !me) return <View style={s.center}><ActivityIndicator /></View>;
   const { request: r, permissions: p } = d;
@@ -51,6 +73,8 @@ export default function RequestDetailScreen() {
   const evidence = d.attachments.filter((a) => a.kind === 'evidence');
   const productPreview = r.product_url ? d.previews.find((pv) => pv.url === r.product_url) : undefined;
   const receipts = d.attachments.filter((a) => a.kind === 'receipt');
+  const actor = actorOf(d);
+  const partyIds = [r.requester_id, ...d.reviewers.map((x) => x.id), ...(d.assignee ? [d.assignee.id] : [])];
 
   const run = async (action: Action, withComment = false, text = comment) => {
     setBusy(true);
@@ -79,8 +103,12 @@ export default function RequestDetailScreen() {
   const postComment = async () => {
     setBusy(true);
     try {
-      setD(await apiFetch<RequestDetail>(`/requests/${id}/comments`, { method: 'POST', body: JSON.stringify({ body: comment }) }));
+      setD(await apiFetch<RequestDetail>(`/requests/${id}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body: comment, ask_ids: asks }),
+      }));
       setComment('');
+      setAsks([]);
     } catch (e) {
       Alert.alert('コメントできませんでした', (e as Error).message);
     } finally {
@@ -139,9 +167,13 @@ export default function RequestDetailScreen() {
       )}
       <Text style={[s.muted, { marginTop: 6, marginBottom: 12 }]}>
         #{r.id.slice(0, 7)} · 申請者: {d.requester.name} · レビュアー: {d.reviewers.map((x) => `${x.name}（${DECISION_LABEL[x.decision]}）`).join('、') || '—'}
+        {d.assignee ? ` · 担当者: ${d.assignee.name}` : ''}
       </Text>
 
-      <View style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 12 }}>
+      <FlowSteps d={d} meId={me.id} />
+
+      <View style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 12, gap: 12 }}>
+        <AssigneeEditor detail={d} onSaved={setD} />
         <LabelEditor detail={d} onSaved={setD} />
       </View>
 
@@ -264,6 +296,7 @@ export default function RequestDetailScreen() {
                 <Text style={{ fontWeight: '700' }}>{e.user?.name ?? '退会したメンバー'}</Text> <Text style={s.muted}>{timeAgo(e.created_at)}にコメント</Text>
               </Text>
               <View style={{ padding: 10 }}><Markdown fontSize={14}>{e.body}</Markdown></View>
+              <AskLine asked={e.asked ?? []} />
             </View>
           </View>
         ) : (
@@ -272,6 +305,8 @@ export default function RequestDetailScreen() {
           </Text>
         ),
       )}
+
+      <ReplyBanner waiting={d.pending_replies} meId={me.id} />
 
       {/* 次にやること (Web の StatusPanel と同じ分岐) */}
       <View style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 14, marginVertical: 12, gap: 8 }}>
@@ -306,7 +341,8 @@ export default function RequestDetailScreen() {
                   () => run('approve', true),
                 )} />
               <Button title="再確認を依頼" disabled={!comment.trim()} onPress={() => run('request-changes', true)} />
-              <Button title="コメントだけ送る" disabled={!comment.trim() || busy} onPress={postComment} />
+              <AskPicker members={members} meId={me.id} partyIds={partyIds} value={asks} onChange={setAsks} />
+              <Button title={asks.length ? 'コメントして返事をお願いする' : 'コメントだけ送る'} disabled={!comment.trim() || busy} onPress={postComment} />
               <Button title="却下" variant="danger" onPress={reject} />
             </>
           ) : (
@@ -336,6 +372,7 @@ export default function RequestDetailScreen() {
             <Text style={{ fontWeight: '700', color: C.purple, marginTop: 4 }}> マージできます</Text>
             <Text style={s.muted}>
               マージすると、{t.thing}はグループに承認されたものとして扱われます (稟議成立)。
+              そのあとは{actor.id === me.id ? 'あなた' : ` ${actor.name} `}の番です ({t.actVerb})。
             </Text>
             {p.can_merge ? (
               <Button title="マージする" variant="merge" busy={busy} onPress={() =>
@@ -352,7 +389,11 @@ export default function RequestDetailScreen() {
           <>
             <Text style={{ fontWeight: '700', color: C.purple }}>マージ済み</Text>
             <Text style={s.muted}>{t.mergedSub}</Text>
-            {p.can_mark_purchased && <Button title={t.markDone} variant="blue" onPress={() => router.push(`/requests/purchase/${r.id}`)} />}
+            {p.can_mark_purchased ? (
+              <Button title={t.markDone} variant="blue" onPress={() => router.push(`/requests/purchase/${r.id}`)} />
+            ) : (
+              <Text style={s.muted}>{actor.name} の{t.waitingDone}を待っています。</Text>
+            )}
             {tasksFollowUp}
           </>
         )}
@@ -388,9 +429,12 @@ export default function RequestDetailScreen() {
       {p.can_comment && r.status !== 'draft' && !p.can_approve && (
         <View style={{ gap: 8 }}>
           <TextInput style={[s.input, s.multi]} multiline value={comment} onChangeText={setComment} placeholder="質問や感想を書きましょう" />
-          <Text style={[s.muted, { fontSize: 12 }]}>Markdown が使えます。URL はそのままリンクになります。</Text>
+          <AskPicker members={members} meId={me.id} partyIds={partyIds} value={asks} onChange={setAsks} />
+          <Text style={[s.muted, { fontSize: 12 }]}>Markdown が使えます。URL はそのままリンクになります。返事をお願いした人には通知が届き、その人の番になります。</Text>
           <Pressable disabled={!comment.trim() || busy} onPress={postComment}>
-            <Text style={[s.link, { textAlign: 'right', fontWeight: '600', opacity: comment.trim() ? 1 : 0.4 }]}>コメントする</Text>
+            <Text style={[s.link, { textAlign: 'right', fontWeight: '600', opacity: comment.trim() ? 1 : 0.4 }]}>
+              {asks.length ? 'コメントして返事をお願いする' : 'コメントする'}
+            </Text>
           </Pressable>
         </View>
       )}

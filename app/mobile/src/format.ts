@@ -12,6 +12,8 @@ import {
   type RequestDetail,
   type RequestKind,
   type TimelineEntry,
+  type UserRef,
+  actorOf,
 } from './types';
 
 export function money(amount: number | null | undefined, currency = 'JPY'): string {
@@ -75,6 +77,7 @@ const FIELD_LABEL: Record<string, string> = {
   notes: 'メモ',
   'approval tasks': '承認したらしてほしいこと',
   reviewers: 'レビュアー',
+  assignee: '担当者',
   alternatives: '比較商品',
 };
 
@@ -110,10 +113,70 @@ export function describeEvent(e: Extract<TimelineEntry, { type: 'event' }>, kind
       const removed = names('removed');
       return `${who} がラベル${[added && `${added}を付け`, removed && `${removed}を外し`].filter(Boolean).join('、')}ました`;
     }
+    case 'assigned':
+      return e.metadata.assignee_name
+        ? `${who} が ${e.metadata.assignee_name} を担当者にしました`
+        : `${who} が担当者を外しました（申請者が動きます）`;
     case 'attachment_added': return `${who} が ${e.metadata.file_name ?? 'ファイル'} を添付しました`;
     case 'attachment_removed': return `${who} が ${e.metadata.file_name ?? 'ファイル'} を削除しました`;
     default: return `${who}: ${e.action}`;
   }
+}
+
+/** 3段の流れ (申請 → 承認 → 実行) の各段の状態。stopped は却下・取り下げで止まった段 */
+export type FlowState = 'done' | 'current' | 'todo' | 'stopped';
+
+export interface FlowStep {
+  title: string;
+  /** その段で動く人 */
+  people: UserRef[];
+  /** 今の段の様子 (例: レビュー中・マージ待ち・購入する) */
+  note: string;
+  state: FlowState;
+}
+
+/** 稟議の流れを「申請 → 承認 → 実行」の3段にする。誰が・どこまで進んだかを詳細画面の上に出す */
+export function flowSteps(d: Pick<RequestDetail, 'request' | 'requester' | 'assignee' | 'reviewers'>): FlowStep[] {
+  const r = d.request;
+  const t = KIND_TEXT[r.kind];
+  const states = ((): [FlowState, FlowState, FlowState] => {
+    switch (r.status) {
+      case 'draft':
+      case 'changes_needed': return ['current', 'todo', 'todo'];
+      case 'submitted':
+      case 'under_review':
+      case 'approved': return ['done', 'current', 'todo'];
+      case 'merged': return ['done', 'done', 'current'];
+      case 'purchased': return ['done', 'done', 'done'];
+      // クローズ: 済んだ段の次で止まった (マージ後の取り下げなら実行で止まった)
+      case 'closed':
+        if (r.merged_at) return ['done', 'done', 'stopped'];
+        return r.submitted_at ? ['done', 'stopped', 'todo'] : ['stopped', 'todo', 'todo'];
+    }
+  })();
+  const requestNote: Partial<Record<typeof r.status, string>> = { draft: '下書き', changes_needed: '見直して再申請' };
+  const approveNote: Partial<Record<typeof r.status, string>> = {
+    submitted: 'レビュー待ち',
+    under_review: 'レビュー中',
+    approved: '承認済み・マージ待ち',
+  };
+  return [
+    { title: '申請', people: [d.requester], note: requestNote[r.status] ?? '申請済み', state: states[0] },
+    {
+      title: '承認',
+      people: d.reviewers,
+      note: states[1] === 'stopped'
+        ? (r.close_reason === 'rejected' ? '却下' : '取り下げ')
+        : approveNote[r.status] ?? (states[1] === 'done' ? 'マージ済み' : 'レビューとマージ'),
+      state: states[1],
+    },
+    {
+      title: '実行',
+      people: [actorOf(d)],
+      note: states[2] === 'done' ? t.done : states[2] === 'stopped' ? '取り下げ' : `${d.assignee ? '担当者が' : '申請者が'}${t.actVerb}`,
+      state: states[2],
+    },
+  ];
 }
 
 export interface Checkpoint {
@@ -193,6 +256,8 @@ export function fieldLabel(field: string, kind: RequestKind): string {
 
 /** 変更前・変更後の値を表示用の文字列にする */
 export function formatChangeValue(field: string, v: unknown, currency = 'JPY'): string {
+  // 担当者なしは、申請者が動くということ
+  if (field === 'assignee' && v == null) return '(申請者)';
   if (v == null || v === '' || (Array.isArray(v) && v.length === 0)) return '(なし)';
   switch (field) {
     case 'price':

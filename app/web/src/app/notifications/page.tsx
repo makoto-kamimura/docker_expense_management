@@ -15,6 +15,10 @@ const KIND_ICON: Record<NotificationKind, IconName> = {
   approved: 'check',
   rejected: 'x',
   merged: 'merge',
+  assigned: 'person',
+  purchased: 'bag',
+  reply_requested: 'reply',
+  replied: 'comment',
 };
 
 /** 自分宛ての通知。稟議を開くと、その稟議の通知は既読になる */
@@ -39,7 +43,7 @@ export default async function NotificationsPage() {
       <div className="box">
         <div className="box-head">
           <h2>この端末への通知</h2>
-          <span className="muted small">レビューの依頼・確認の依頼・承認・却下・マージを知らせます</span>
+          <span className="muted small">レビューの依頼・確認の依頼・承認・却下・マージ・担当・完了の報告・返事のお願いと返事を知らせます</span>
         </div>
         <div className="box-body">
           <PushToggle publicKey={key.public_key} />

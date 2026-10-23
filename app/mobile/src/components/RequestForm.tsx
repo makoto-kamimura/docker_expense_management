@@ -38,6 +38,8 @@ export interface RequestPayload {
   notes: string | null;
   approval_tasks: string | null;
   reviewer_ids: string[];
+  /** 担当者 (null なら申請者が動く) */
+  assignee_id: string | null;
   alternatives: { name: string; price: number | null; url: string | null; notes: string | null }[];
 }
 
@@ -112,6 +114,10 @@ export default function RequestForm({
   const [tasks, setTasks] = useState(r?.approval_tasks ?? '');
   const [tasksPreview, setTasksPreview] = useState(false);
   const [reviewers, setReviewers] = useState<string[]>(initial?.reviewers.map((x) => x.id) ?? []);
+  // 担当者 (マージされたあとに動く人)。null は自分 (申請者) が動く
+  const [assignee, setAssignee] = useState<string | null>(
+    r?.assignee_id && r.assignee_id !== selfId ? r.assignee_id : null,
+  );
   const [alts, setAlts] = useState<AltDraft[]>(
     initial?.alternatives.map((a) => ({
       name: a.name,
@@ -157,6 +163,7 @@ export default function RequestForm({
           notes: opt(notes),
           approval_tasks: opt(tasks),
           reviewer_ids: reviewers,
+          assignee_id: assignee,
           alternatives: alts
             .filter((a) => a.name.trim())
             .map((a) => ({ name: a.name.trim(), price: a.price === '' ? null : Number(a.price), url: opt(a.url), notes: opt(a.notes) })),
@@ -289,6 +296,28 @@ export default function RequestForm({
             })}
           </View>
         )}
+      </Card>
+
+      <Card title="担当者" ja="マージされたら動く人">
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {[{ id: null as string | null, name: '自分 (申請者)' }, ...members.filter((m) => m.id !== selfId)].map((m) => {
+            const on = assignee === m.id;
+            return (
+              <Pressable
+                key={m.id ?? 'self'}
+                onPress={() => setAssignee(m.id)}
+                style={[s.chip, on && s.chipOn]}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on }}
+              >
+                <Text style={[s.chipText, on && s.chipTextOn]}>{on ? '✓ ' : ''}{m.name}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={[s.muted, { marginTop: 6, fontSize: 12 }]}>
+          マージされたら担当者の番になり、担当者が{t.actVerb}・「{t.markDone}」をします。あとから詳細画面で変えられます。
+        </Text>
       </Card>
 
       <Card

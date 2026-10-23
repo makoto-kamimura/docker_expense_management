@@ -31,6 +31,8 @@ export interface RequestDraft {
   notes?: string | null;
   approval_tasks?: string | null;
   reviewer_ids?: string[];
+  /** 担当者 (null / 自分なら申請者が動く) */
+  assignee_id?: string | null;
   alternatives?: AlternativeDraft[];
 }
 
@@ -49,7 +51,7 @@ export default function RequestForm({
 }: {
   action: (fd: FormData) => Promise<{ error?: string }>;
   defaults?: RequestDraft;
-  /** Reviewer 候補 (同じ家族のメンバー) */
+  /** Reviewer・担当者の候補 (同じ家族のメンバー) */
   members: Member[];
   /** グループのラベル (付けるものを選ぶ) */
   labels: Label[];
@@ -64,6 +66,12 @@ export default function RequestForm({
 }) {
   const [alternatives, setAlternatives] = useState<AlternativeDraft[]>(defaults?.alternatives ?? []);
   const [reviewers, setReviewers] = useState<string[]>(defaults?.reviewer_ids ?? []);
+  // 担当者。'' は「自分 (申請者) が動く」
+  const [assignee, setAssignee] = useState<string>(
+    defaults?.assignee_id && defaults.assignee_id !== selfId && members.some((m) => m.id === defaults.assignee_id)
+      ? defaults.assignee_id
+      : '',
+  );
   const [typeId, setTypeId] = useState<string>(defaults?.type_id ?? types[0]?.id ?? '');
   const [labelIds, setLabelIds] = useState<string[]>(defaults?.label_ids ?? []);
   // 理由と「承認したらしてほしいこと」は Markdown で書ける
@@ -280,6 +288,27 @@ export default function RequestForm({
               ))}
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="box">
+        <div className="box-head"><h2>担当者 <span className="ja">マージされたら動く人</span></h2></div>
+        <div className="box-body">
+          <div className="chips" role="radiogroup" aria-label="担当者">
+            <label className={`chip${assignee === '' ? ' chip-on' : ''}`}>
+              <input type="radio" name="assignee_id" value="" checked={assignee === ''} onChange={() => setAssignee('')} />
+              自分 (申請者)
+            </label>
+            {members.filter((m) => m.id !== selfId).map((m) => (
+              <label key={m.id} className={`chip${assignee === m.id ? ' chip-on' : ''}`}>
+                <input type="radio" name="assignee_id" value={m.id} checked={assignee === m.id} onChange={() => setAssignee(m.id)} />
+                {m.name}
+              </label>
+            ))}
+          </div>
+          <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>
+            マージされたら担当者の番になり、担当者が{t.actVerb}・「{t.markDone}」をします。あとからサイドバーで変えられます。
+          </p>
         </div>
       </div>
 

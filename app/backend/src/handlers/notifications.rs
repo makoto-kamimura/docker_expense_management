@@ -1,5 +1,5 @@
-//! 通知: 稟議のボールが自分に来たとき (レビューの依頼・確認の依頼・承認・却下・マージ) に、相手に知らせる。
-//! アプリ内の通知 (ベルと一覧) に残し、購読している端末には Web Push でも送る (crate::push)。
+//! 通知: 稟議のボールが自分に来たとき (レビューの依頼・確認の依頼・承認・却下・マージ・担当・返事のお願いなど) に、
+//! 相手に知らせる。アプリ内の通知 (ベルと一覧) に残し、購読している端末には Web Push でも送る (crate::push)。
 
 use axum::{
     extract::{Path, State},
@@ -20,14 +20,14 @@ use crate::{
 /// 一覧に出す件数
 const LIST_LIMIT: i64 = 50;
 
-/// 通知する出来事。コメントは通知しない
+/// 通知する出来事。ふつうのコメントは通知せず、返事のお願いと、その返事だけを知らせる
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Notify {
     /// 申請 (→ レビュアー)
     ReviewRequested,
     /// 再確認の依頼のあとの再申請 (→ レビュアー)
     Resubmitted,
-    /// 再オープン (→ 申請者とレビュアー)
+    /// 再オープン (→ 申請者・レビュアー・担当者)
     Reopened,
     /// 再確認の依頼 (→ 申請者)
     ChangesRequested,
@@ -35,8 +35,16 @@ pub enum Notify {
     Approved,
     /// 却下 (→ 申請者)
     Rejected,
-    /// マージ (→ 申請者とレビュアー)
+    /// マージ (→ 申請者・レビュアー・担当者)
     Merged,
+    /// 担当者になった (→ 担当者)
+    Assigned,
+    /// 完了の報告 (購入済み・行ってきた・やった) (→ 申請者・レビュアー)
+    Purchased,
+    /// コメントでの返事のお願い (→ お願いされた人。notify_users で宛先を指定する)
+    ReplyRequested,
+    /// 返事のお願いへの返事 (→ お願いした人。notify_users で宛先を指定する)
+    Replied,
 }
 
 impl Notify {
@@ -49,23 +57,41 @@ impl Notify {
             Self::Approved => "approved",
             Self::Rejected => "rejected",
             Self::Merged => "merged",
+            Self::Assigned => "assigned",
+            Self::Purchased => "purchased",
+            Self::ReplyRequested => "reply_requested",
+            Self::Replied => "replied",
         }
     }
 }
 
-/// 通知を受け取る人。操作した本人には送らない
-pub fn recipients(kind: Notify, requester_id: Uuid, reviewer_ids: &[Uuid], actor_id: Uuid) -> Vec<Uuid> {
-    let (to_requester, to_reviewers) = match kind {
-        Notify::ReviewRequested | Notify::Resubmitted => (false, true),
-        Notify::ChangesRequested | Notify::Approved | Notify::Rejected => (true, false),
-        Notify::Reopened | Notify::Merged => (true, true),
+/// 稟議の当事者 (通知を受け取る人を決めるのに使う)
+pub struct Parties<'a> {
+    pub requester_id: Uuid,
+    pub reviewer_ids: &'a [Uuid],
+    /// 担当者 (いなければ申請者が動く)
+    pub assignee_id: Option<Uuid>,
+}
+
+/// 通知を受け取る人。操作した本人には送らない。返事のお願いと返事は宛先を指定するので、ここでは誰にも送らない
+pub fn recipients(kind: Notify, parties: &Parties, actor_id: Uuid) -> Vec<Uuid> {
+    let (to_requester, to_reviewers, to_assignee) = match kind {
+        Notify::ReviewRequested | Notify::Resubmitted => (false, true, false),
+        Notify::ChangesRequested | Notify::Approved | Notify::Rejected => (true, false, false),
+        Notify::Reopened | Notify::Merged => (true, true, true),
+        Notify::Assigned => (false, false, true),
+        Notify::Purchased => (true, true, false),
+        Notify::ReplyRequested | Notify::Replied => (false, false, false),
     };
     let mut ids: Vec<Uuid> = Vec::new();
     if to_requester {
-        ids.push(requester_id);
+        ids.push(parties.requester_id);
     }
     if to_reviewers {
-        ids.extend_from_slice(reviewer_ids);
+        ids.extend_from_slice(parties.reviewer_ids);
+    }
+    if to_assignee {
+        ids.extend(parties.assignee_id);
     }
     ids.retain(|id| *id != actor_id);
     ids.sort();
@@ -84,6 +110,10 @@ pub fn message(kind: &str, actor: Option<&str>) -> String {
         "approved" => format!("{who} が承認しました"),
         "rejected" => format!("{who} が却下しました"),
         "merged" => format!("{who} がマージしました"),
+        "assigned" => format!("{who} があなたを担当者にしました"),
+        "purchased" => format!("{who} が完了を報告しました"),
+        "reply_requested" => format!("{who} から返事のお願いがあります"),
+        "replied" => format!("{who} から返事がありました"),
         _ => format!("{who} が稟議を更新しました"),
     }
 }
@@ -94,10 +124,22 @@ pub async fn notify(
     request_id: Uuid,
     actor_id: Uuid,
     kind: Notify,
-    requester_id: Uuid,
-    reviewer_ids: &[Uuid],
+    parties: &Parties<'_>,
 ) -> ApiResult<Vec<Uuid>> {
-    let to = recipients(kind, requester_id, reviewer_ids, actor_id);
+    notify_users(conn, request_id, actor_id, kind, &recipients(kind, parties, actor_id)).await
+}
+
+/// 宛先を指定して通知を作る (返事のお願いと返事)。操作した本人には送らない
+pub async fn notify_users(
+    conn: &mut PgConnection,
+    request_id: Uuid,
+    actor_id: Uuid,
+    kind: Notify,
+    to: &[Uuid],
+) -> ApiResult<Vec<Uuid>> {
+    let mut to: Vec<Uuid> = to.iter().copied().filter(|id| *id != actor_id).collect();
+    to.sort();
+    to.dedup();
     if to.is_empty() {
         return Ok(Vec::new());
     }
@@ -245,30 +287,71 @@ pub async fn unsubscribe(
 mod tests {
     use super::*;
 
+    fn parties(requester_id: Uuid, reviewer_ids: &[Uuid], assignee_id: Option<Uuid>) -> Parties<'_> {
+        Parties { requester_id, reviewer_ids, assignee_id }
+    }
+
+    fn sorted(mut ids: Vec<Uuid>) -> Vec<Uuid> {
+        ids.sort();
+        ids
+    }
+
     #[test]
     fn review_requests_go_to_reviewers() {
         let (requester, a, b) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
-        let mut both = vec![a, b];
-        both.sort();
-        assert_eq!(recipients(Notify::ReviewRequested, requester, &[a, b], requester), both);
-        assert_eq!(recipients(Notify::Resubmitted, requester, &[a, b], requester), both);
+        let reviewers = [a, b];
+        let p = parties(requester, &reviewers, Some(Uuid::new_v4()));
+        assert_eq!(recipients(Notify::ReviewRequested, &p, requester), sorted(vec![a, b]));
+        assert_eq!(recipients(Notify::Resubmitted, &p, requester), sorted(vec![a, b]));
     }
 
     #[test]
     fn decisions_go_to_requester() {
         let (requester, a) = (Uuid::new_v4(), Uuid::new_v4());
+        let reviewers = [a];
+        let p = parties(requester, &reviewers, Some(Uuid::new_v4()));
         for kind in [Notify::ChangesRequested, Notify::Approved, Notify::Rejected] {
-            assert_eq!(recipients(kind, requester, &[a], a), vec![requester], "{kind:?}");
+            assert_eq!(recipients(kind, &p, a), vec![requester], "{kind:?}");
         }
     }
 
     #[test]
     fn merge_and_reopen_go_to_everyone_but_the_actor() {
-        let (requester, a, b) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let (requester, a, b, assignee) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
         for kind in [Notify::Merged, Notify::Reopened] {
-            let mut want = vec![requester, b];
-            want.sort();
-            assert_eq!(recipients(kind, requester, &[a, b], a), want, "{kind:?}");
+            assert_eq!(recipients(kind, &parties(requester, &[a, b], None), a), sorted(vec![requester, b]), "{kind:?}");
+            // 担当者がいれば、担当者にも知らせる (マージされたら担当者の番になる)
+            assert_eq!(
+                recipients(kind, &parties(requester, &[a, b], Some(assignee)), a),
+                sorted(vec![requester, b, assignee]),
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn assignment_goes_to_the_assignee_only() {
+        let (requester, a, assignee) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        assert_eq!(recipients(Notify::Assigned, &parties(requester, &[a], Some(assignee)), a), vec![assignee]);
+        // 自分を担当者にしたときは送らない
+        assert!(recipients(Notify::Assigned, &parties(requester, &[a], Some(a)), a).is_empty());
+    }
+
+    #[test]
+    fn completion_goes_to_requester_and_reviewers() {
+        let (requester, a, assignee) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        let reviewers = [a];
+        let p = parties(requester, &reviewers, Some(assignee));
+        assert_eq!(recipients(Notify::Purchased, &p, assignee), sorted(vec![requester, a]));
+    }
+
+    #[test]
+    fn replies_are_sent_only_to_named_users() {
+        let (requester, a) = (Uuid::new_v4(), Uuid::new_v4());
+        let reviewers = [a];
+        let p = parties(requester, &reviewers, None);
+        for kind in [Notify::ReplyRequested, Notify::Replied] {
+            assert!(recipients(kind, &p, a).is_empty(), "{kind:?}");
         }
     }
 
@@ -276,5 +359,8 @@ mod tests {
     fn message_names_the_actor() {
         assert_eq!(message("changes_requested", Some("ママ")), "ママ から確認の依頼があります");
         assert_eq!(message("approved", None), "メンバー が承認しました");
+        assert_eq!(message("assigned", Some("ママ")), "ママ があなたを担当者にしました");
+        assert_eq!(message("reply_requested", Some("パパ")), "パパ から返事のお願いがあります");
+        assert_eq!(message("replied", Some("子ども")), "子ども から返事がありました");
     }
 }

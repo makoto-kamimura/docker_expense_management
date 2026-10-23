@@ -141,13 +141,14 @@ export default function RequestsScreen() {
             <View style={{ flex: 1, gap: 4 }}>
               {/* 状態と金額 / タイトル / ラベル / 申請者・レビュアー・更新 */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <StatusBadge status={item.status} kind={item.kind} viewer={item.viewer_role} myTurn={item.my_turn} />
+                <StatusBadge status={item.status} kind={item.kind} viewer={item.viewer_role} myTurn={item.my_turn} asked={item.asked_to_reply} />
                 <Text style={{ fontSize: 16, fontWeight: '700', color: C.fg }}>{money(item.actual_price ?? item.price, item.currency)}</Text>
               </View>
               <Text style={{ fontSize: 16, fontWeight: '600', color: C.fg }}>{typeOf(types, item.type_id, item.kind).icon} {item.title}</Text>
               <LabelList labels={item.labels} />
               <Text style={s.muted}>
                 #{item.id.slice(0, 7)} · {item.requester_name} の申請 · レビュアー: {item.reviewer_names.join('、') || '—'}
+                {item.assignee_name ? ` · 担当: ${item.assignee_name}` : ''}
               </Text>
               <Text style={s.muted}>
                 {timeAgo(item.updated_at)}に更新{item.comment_count > 0 ? ` · 💬 ${item.comment_count}` : ''}

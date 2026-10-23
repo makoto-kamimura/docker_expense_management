@@ -101,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/requests/:id/reopen", post(handlers::requests::reopen))
         .route("/requests/:id/comments", post(handlers::requests::comment))
         .route("/requests/:id/labels", put(handlers::labels::set_request_labels))
+        .route("/requests/:id/assignee", put(handlers::requests::set_assignee))
         .route("/labels", get(handlers::labels::list).post(handlers::labels::create))
         .route("/labels/:id", put(handlers::labels::update).delete(handlers::labels::delete))
         .route("/request-types", get(handlers::request_types::list).post(handlers::request_types::create))

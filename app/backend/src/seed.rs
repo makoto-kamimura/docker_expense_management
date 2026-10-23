@@ -387,6 +387,24 @@ async fn seed_requests(state: &AppState, family_id: Uuid) -> anyhow::Result<()> 
             .execute(&mut *tx)
             .await?;
     }
+    // コーヒーマシンはママが買う (担当者。マージ済みなのでママの番)
+    sqlx::query("UPDATE purchase_requests SET assignee_id = $1 WHERE id = $2")
+        .bind(mom)
+        .bind(coffee)
+        .execute(&mut *tx)
+        .await?;
+    // カメラのママの質問は、パパへの返事のお願い (パパが答えたので返事済み)
+    sqlx::query(
+        "INSERT INTO reply_requests (request_id, comment_id, user_id, created_at, answered_at)
+         SELECT c.request_id, c.id, $2, c.created_at, now() - interval '1 day'
+           FROM comments c WHERE c.request_id = $1 AND c.user_id = $3
+          ORDER BY c.created_at LIMIT 1",
+    )
+    .bind(camera)
+    .bind(dad)
+    .bind(mom)
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     tracing::info!("seeded sample requests");
     Ok(())
