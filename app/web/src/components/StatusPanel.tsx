@@ -3,7 +3,7 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { requestActionAction } from '@/lib/actions';
 import { money } from '@/lib/format';
-import { KIND_TEXT, type RequestDetail } from '@/lib/types';
+import { KIND_TEXT, actorOf, type RequestDetail } from '@/lib/types';
 import ConfirmButton from './ConfirmButton';
 import Markdown from './Markdown';
 import Octicon, { type IconName } from './Octicon';
@@ -22,6 +22,9 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
   const isRequester = r.requester_id === meId;
   const reviewerNames = reviewers.map((x) => x.name).join('、') || '(未指定)';
   const t = KIND_TEXT[r.kind];
+  // マージされたあとに動く人 (担当者。いなければ申請者)
+  const actor = actorOf(detail);
+  const actorIsMe = actor.id === meId;
 
   const run = (action: Action, withComment = false) =>
     start(async () => {
@@ -168,6 +171,7 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
           {errorBox}
           <p className="muted">
             マージすると、{t.thing}はグループに承認されたものとして扱われます (稟議成立)。
+            そのあとは{actorIsMe ? 'あなた' : ` ${actor.name} `}の番です ({t.actVerb})。
           </p>
           <div className="actions">
             {p.can_merge ? (
@@ -203,7 +207,7 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
           {p.can_mark_purchased ? (
             <Link className="btn btn-blue" href={`/requests/${r.id}/purchase`}>{t.markDone}</Link>
           ) : (
-            <span className="muted">{t.waitingDone}</span>
+            <span className="muted">{actor.name} の{t.waitingDone}を待っています。</span>
           )}
           {p.can_close && <WithdrawButton pending={pending} onWithdraw={() => run('close')} />}
         </div>

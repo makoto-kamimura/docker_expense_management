@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { apiFetch, getRequestOr404 } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { checkpoints, dateRange, fmtDateTime, hostOf, money } from '@/lib/format';
-import { DECISION_LABEL, KIND_TEXT, STATUS_GROUP, statusLabel, typeOf, type Label, type RequestRef, type RequestType, type ReviewerDecision } from '@/lib/types';
+import { DECISION_LABEL, KIND_TEXT, STATUS_GROUP, statusLabel, typeOf, type Label, type Member, type RequestRef, type RequestType, type ReviewerDecision } from '@/lib/types';
 import LabelChip from '@/components/LabelChip';
 import LabelPicker from '@/components/LabelPicker';
 import Avatar from '@/components/Avatar';
@@ -19,6 +19,9 @@ import ChoreBadges from '@/components/ChoreBadges';
 import ContributionGraph from '@/components/ContributionGraph';
 import DeleteRequestButton from '@/components/DeleteRequestButton';
 import Markdown from '@/components/Markdown';
+import FlowSteps from '@/components/FlowSteps';
+import AssigneePicker from '@/components/AssigneePicker';
+import AutoRefresh from '@/components/AutoRefresh';
 
 const DECISION_ICON: Record<ReviewerDecision, IconName> = {
   pending: 'dot',
@@ -48,20 +51,26 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
   const d = await getRequestOr404(params.id);
   const { request: r, permissions: p } = d;
   // ラベルを付け外しできる人にだけ、家族のラベルの一覧を取る
-  const [allLabels, types] = await Promise.all([
+  // メンバーは、担当者の候補と、コメントで返事をお願いする相手に使う
+  const [allLabels, types, members] = await Promise.all([
     p.can_label ? apiFetch<Label[]>('/labels') : Promise.resolve([] as Label[]),
     apiFetch<RequestType[]>('/request-types'),
+    apiFetch<Member[]>('/family/members'),
   ]);
   const type = typeOf(types, r.type_id, r.kind);
   const evidence = d.attachments.filter((a) => a.kind === 'evidence');
   const receipts = d.attachments.filter((a) => a.kind === 'receipt');
   const t = KIND_TEXT[r.kind];
   const preview = (url: string | null) => (url ? d.previews.find((pv) => pv.url === url) : undefined);
+  const partyIds = [r.requester_id, ...d.reviewers.map((x) => x.id), ...(d.assignee ? [d.assignee.id] : [])];
 
   return (
     <div>
       <RequestHeader d={d} canRequest={user.can_request} meId={user.id} />
       <RequestTabs id={r.id} active="conversation" d={d} />
+      <FlowSteps d={d} meId={user.id} />
+      {/* 相手のコメントや操作が、開いたままの画面にも出るように読み直す */}
+      <AutoRefresh />
 
       <div className="detail-grid">
         <div>
@@ -173,7 +182,16 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
           <Timeline entries={d.timeline} requesterId={r.requester_id} meId={user.id} kind={r.kind} />
           <StatusPanel detail={d} meId={user.id} />
           {p.can_comment && r.status !== 'draft' && (
-            <div className="indent"><CommentForm requestId={r.id} meName={user.name} /></div>
+            <div className="indent">
+              <CommentForm
+                requestId={r.id}
+                meId={user.id}
+                meName={user.name}
+                members={members}
+                partyIds={partyIds}
+                waiting={d.pending_replies}
+              />
+            </div>
           )}
         </div>
 
@@ -191,6 +209,26 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
                 </span>
               </div>
             ))}
+          </div>
+          <div className="side-section">
+            <h3 className="side-head">
+              <span>担当者</span>
+              {p.can_assign && (
+                <AssigneePicker
+                  requestId={r.id}
+                  members={members}
+                  requesterId={r.requester_id}
+                  requesterName={d.requester.name}
+                  selected={r.assignee_id}
+                />
+              )}
+            </h3>
+            {d.assignee ? (
+              <div className="person"><Avatar name={d.assignee.name} /><span>{d.assignee.name}</span></div>
+            ) : (
+              <p className="muted">未指定 (申請者の {d.requester.name} が動きます)</p>
+            )}
+            <p className="muted" style={{ marginTop: 4 }}>マージされたら、担当者が{t.actVerb}・「{t.markDone}」をします。</p>
           </div>
           <div className="side-section">
             <h3>申請者</h3>

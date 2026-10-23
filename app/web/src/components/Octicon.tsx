@@ -4,7 +4,8 @@ import { STATUS_GROUP } from '@/lib/types';
 /** GitHub の Octicons 風の 16px アイコン (線画で自作) */
 export type IconName =
   | 'pr' | 'pr-draft' | 'merge' | 'pr-closed' | 'bag' | 'check' | 'x' | 'comment'
-  | 'eye' | 'pencil' | 'arrow' | 'paperclip' | 'dot' | 'redo' | 'branch' | 'history' | 'tag' | 'bell';
+  | 'eye' | 'pencil' | 'arrow' | 'paperclip' | 'dot' | 'redo' | 'branch' | 'history' | 'tag' | 'bell'
+  | 'person' | 'reply';
 
 export default function Octicon({ name, size = 16, className }: { name: IconName; size?: number; className?: string }) {
   const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -44,6 +45,10 @@ export default function Octicon({ name, size = 16, className }: { name: IconName
         return (<><path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1.25 1.25H2.75z" {...p} /><path d="M6.5 13.5a1.5 1.5 0 0 0 3 0" {...p} /></>);
       case 'redo':
         return <path d="M12.5 5.5H6a3.5 3.5 0 0 0 0 7h4M10 3l2.5 2.5L10 8" {...p} />;
+      case 'person':
+        return (<><circle cx="8" cy="5" r="2.75" {...p} /><path d="M2.75 14a5.25 5.25 0 0 1 10.5 0" {...p} /></>);
+      case 'reply':
+        return <path d="M6.5 3.5 2.5 7.5l4 4M2.5 7.5h7a4 4 0 0 1 4 4v1" {...p} />;
       case 'dot':
       default:
         return <circle cx="8" cy="8" r="3" fill="currentColor" />;

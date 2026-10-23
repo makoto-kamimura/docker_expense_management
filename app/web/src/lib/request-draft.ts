@@ -18,6 +18,7 @@ export function draftFromDetail(d: RequestDetail): RequestDraft {
     notes: r.notes,
     approval_tasks: r.approval_tasks,
     reviewer_ids: d.reviewers.map((x) => x.id),
+    assignee_id: r.assignee_id,
     alternatives: d.alternatives.map((a) => ({
       name: a.name,
       price: a.price == null ? '' : String(a.price),

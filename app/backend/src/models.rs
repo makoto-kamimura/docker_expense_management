@@ -1,6 +1,11 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
+
+/// 「送られなかった」(None) と「null が送られた」(Some(None)) を区別して受け取る。`#[serde(default)]` と一緒に使う
+fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
+    Option::<T>::deserialize(d).map(Some)
+}
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -148,6 +153,8 @@ pub struct PurchaseRequest {
     pub notes: Option<String>,
     /// 承認したらしてほしいこと (Markdown)。書かれていれば、済んでいないときに申請者が再オープンできる
     pub approval_tasks: Option<String>,
+    /// 担当者 (マージされたあとに動く人)。None なら申請者が動く
+    pub assignee_id: Option<Uuid>,
     pub status: RequestStatus,
     pub submitted_at: Option<DateTime<Utc>>,
     pub approved_at: Option<DateTime<Utc>>,
@@ -165,6 +172,13 @@ pub struct PurchaseRequest {
     pub updated_at: DateTime<Utc>,
 }
 
+impl PurchaseRequest {
+    /// マージされたあとに動く人 (担当者。いなければ申請者)
+    pub fn actor_id(&self) -> Uuid {
+        self.assignee_id.unwrap_or(self.requester_id)
+    }
+}
+
 /// 一覧用。申請者名・Reviewer 名・コメント数を付ける。
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct RequestListItem {
@@ -173,6 +187,8 @@ pub struct RequestListItem {
     pub request: PurchaseRequest,
     pub requester_name: String,
     pub reviewer_names: Vec<String>,
+    /// 担当者の名前 (いなければ None = 申請者が動く)
+    pub assignee_name: Option<String>,
     pub comment_count: i64,
     /// 商品URL のプレビュー画像 (GET /link-previews/:id/image)
     pub preview_id: Option<Uuid>,
@@ -185,6 +201,8 @@ pub struct RequestListItem {
     pub children_count: i64,
     /// 次に動くのがログインユーザーか (requests::MY_TURN)
     pub my_turn: bool,
+    /// ログインユーザーに、まだ返事をしていない返事のお願いが来ているか
+    pub asked_to_reply: bool,
     /// ログインユーザーの立場: requester / reviewer / other
     pub viewer_role: String,
 }
@@ -296,6 +314,24 @@ pub struct Attachment {
     pub created_at: DateTime<Utc>,
 }
 
+/// コメントで返事をお願いした相手と、返事をしたか
+#[derive(Debug, Clone, Serialize)]
+pub struct ReplyAsk {
+    pub user: UserRef,
+    pub answered_at: Option<DateTime<Utc>>,
+}
+
+/// まだ返事が来ていない返事のお願い (詳細画面で「返事待ち」を出す)
+#[derive(Debug, Clone, Serialize)]
+pub struct PendingReply {
+    pub comment_id: Uuid,
+    /// お願いした人 (退会していれば None)
+    pub asker: Option<UserRef>,
+    /// お願いされた人
+    pub user: UserRef,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Activity 欄。コメントと操作履歴を時系列に並べたもの。
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -304,6 +340,8 @@ pub enum TimelineEntry {
         id: Uuid,
         user: Option<UserRef>,
         body: String,
+        /// このコメントで返事をお願いした相手
+        asked: Vec<ReplyAsk>,
         created_at: DateTime<Utc>,
     },
     Event {
@@ -341,6 +379,8 @@ pub struct Permissions {
     pub can_reopen: bool,
     /// ラベルの付け外し (申請者とレビュアー)
     pub can_label: bool,
+    /// 担当者の変更 (申請者・レビュアー・担当者。完了・クローズ以外)
+    pub can_assign: bool,
 }
 
 /// 分岐元・分岐先の表示用
@@ -363,12 +403,16 @@ pub struct RequestDetail {
     pub children: Vec<RequestRef>,
     pub family_name: String,
     pub requester: UserRef,
+    /// 担当者 (None なら申請者が動く)
+    pub assignee: Option<UserRef>,
     pub merged_by: Option<UserRef>,
     pub reviewers: Vec<Reviewer>,
     pub labels: Vec<Label>,
     pub alternatives: Vec<AlternativeProduct>,
     pub attachments: Vec<Attachment>,
     pub timeline: Vec<TimelineEntry>,
+    /// まだ返事が来ていない返事のお願い (古い順)
+    pub pending_replies: Vec<PendingReply>,
     pub permissions: Permissions,
     /// 商品URL・比較商品の URL などのプレビュー (取得できたものだけ)
     pub previews: Vec<LinkPreview>,
@@ -662,6 +706,9 @@ pub struct RequestInput {
     pub approval_tasks: Option<String>,
     #[serde(default)]
     pub reviewer_ids: Vec<Uuid>,
+    /// 担当者 (マージされたあとに動く人)。null なら申請者が動く。省略時は変えない (作成時は申請者)
+    #[serde(default, deserialize_with = "present")]
+    pub assignee_id: Option<Option<Uuid>>,
     /// 付けるラベル (この集合に置き換える)。省略時はラベルを変えない
     #[serde(default)]
     pub label_ids: Option<Vec<Uuid>>,
@@ -672,6 +719,15 @@ pub struct RequestInput {
 #[derive(Debug, Deserialize)]
 pub struct CommentInput {
     pub body: String,
+    /// 返事をお願いする人 (ボールを渡す相手)
+    #[serde(default)]
+    pub ask_ids: Vec<Uuid>,
+}
+
+/// 担当者の変更。null なら申請者が動く
+#[derive(Debug, Deserialize)]
+pub struct AssigneeInput {
+    pub assignee_id: Option<Uuid>,
 }
 
 /// Approve / Request Changes / Reject / Close に添えるコメント
@@ -747,7 +803,8 @@ pub struct Dashboard {
 #[derive(Debug, Serialize)]
 pub struct NotificationItem {
     pub id: Uuid,
-    /// review_requested / resubmitted / reopened / changes_requested / approved / rejected / merged
+    /// review_requested / resubmitted / reopened / changes_requested / approved / rejected / merged /
+    /// assigned / purchased / reply_requested / replied
     pub kind: String,
     /// 画面に出す文面 (例: 「ママ から確認の依頼があります」)
     pub message: String,

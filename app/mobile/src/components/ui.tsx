@@ -82,28 +82,33 @@ export function statusColor(status: RequestStatus): string {
   return group[STATUS_GROUP[status]];
 }
 
-/** viewer を渡すと再確認の依頼を立場に合わせた名前 (確認依頼あり / 確認待ち) にし、myTurn なら「あなたの番」を添える */
-export function StatusBadge({ status, kind = 'purchase', hint, viewer, myTurn }: {
+/**
+ * viewer を渡すと再確認の依頼を立場に合わせた名前 (確認依頼あり / 確認待ち) にし、myTurn なら「あなたの番」、
+ * asked なら「返事のお願い」を添える
+ */
+export function StatusBadge({ status, kind = 'purchase', hint, viewer, myTurn, asked }: {
   status: RequestStatus;
   kind?: RequestKind;
   hint?: boolean;
   viewer?: ViewerRole;
   myTurn?: boolean;
+  asked?: boolean;
 }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <Text style={[s.status, { backgroundColor: statusColor(status) }]}>{statusLabel(kind, status, viewer)}</Text>
       {myTurn && <TurnChip />}
+      {asked && <TurnChip label="↩ 返事のお願い" />}
       {hint && <Text style={s.ja}>{statusHint(status, viewer)}</Text>}
     </View>
   );
 }
 
-/** 次に動くのが自分であることの印 */
-export function TurnChip() {
+/** 次に動くのが自分であることの印 (label で「返事のお願い」などにも使う) */
+export function TurnChip({ label = '→ あなたの番' }: { label?: string }) {
   return (
     <Text style={{ color: C.yellow, backgroundColor: C.attentionSubtle, borderColor: C.attentionBorderMuted, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, fontSize: 12, fontWeight: '700', overflow: 'hidden' }}>
-      → あなたの番
+      {label}
     </Text>
   );
 }

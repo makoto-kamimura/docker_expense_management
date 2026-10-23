@@ -108,6 +108,9 @@ ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS parent_id UUID REFERENCES
 CREATE INDEX IF NOT EXISTS idx_requests_parent ON purchase_requests(parent_id);
 -- 承認したらしてほしいこと (申請者からレビュアーへのお願い。Markdown)。済んでいなければ申請者が再オープンできる
 ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS approval_tasks TEXT;
+-- 担当者 (マージされたあとに動く人。GitHub の Assignees)。NULL なら申請者が動く
+ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS assignee_id UUID REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_requests_assignee  ON purchase_requests(assignee_id);
 CREATE INDEX IF NOT EXISTS idx_requests_family    ON purchase_requests(family_id);
 CREATE INDEX IF NOT EXISTS idx_requests_requester ON purchase_requests(requester_id);
 CREATE INDEX IF NOT EXISTS idx_requests_status    ON purchase_requests(status);
@@ -154,6 +157,19 @@ CREATE TABLE IF NOT EXISTS comments (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_comments_request ON comments(request_id);
+
+-- 返事のお願い (コメントで相手にボールを渡す)。お願いした人はコメントの書き手。
+-- お願いされた人 (user_id) がその稟議にコメントすると返事済み (answered_at) になる
+CREATE TABLE IF NOT EXISTS reply_requests (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    request_id  UUID NOT NULL REFERENCES purchase_requests(id) ON DELETE CASCADE,
+    comment_id  UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    answered_at TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (comment_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_reply_requests_open ON reply_requests(request_id, user_id) WHERE answered_at IS NULL;
 
 -- 誰が・いつ・何をしたか (Activity 欄)
 CREATE TABLE IF NOT EXISTS activities (
@@ -302,7 +318,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     request_id UUID NOT NULL REFERENCES purchase_requests(id) ON DELETE CASCADE,
     actor_id   UUID REFERENCES users(id) ON DELETE SET NULL,
-    kind       TEXT NOT NULL,           -- review_requested / resubmitted / reopened / changes_requested / approved / rejected / merged
+    kind       TEXT NOT NULL,           -- review_requested / resubmitted / reopened / changes_requested / approved / rejected / merged / assigned / purchased / reply_requested / replied
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     read_at    TIMESTAMPTZ
 );

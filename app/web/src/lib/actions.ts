@@ -120,6 +120,8 @@ function requestPayload(formData: FormData) {
     notes: opt('notes'),
     approval_tasks: opt('approval_tasks'),
     reviewer_ids: formData.getAll('reviewer_ids').map(String),
+    // 空欄 (null) は申請者が動く
+    assignee_id: opt('assignee_id'),
     label_ids: formData.getAll('label_ids').map(String),
     alternatives,
   };
@@ -167,11 +169,23 @@ export async function requestActionAction(
   return r;
 }
 
-export async function commentAction(id: string, body: string): Promise<Result> {
+/** コメントする。askIds の人には返事をお願いする (ボールを渡す) */
+export async function commentAction(id: string, body: string, askIds: string[] = []): Promise<Result> {
   const r = await attempt(() =>
-    apiFetch(`/requests/${id}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
+    apiFetch(`/requests/${id}/comments`, { method: 'POST', body: JSON.stringify({ body, ask_ids: askIds }) }),
   );
   revalidatePath(`/requests/${id}`);
+  revalidatePath('/requests');
+  return r;
+}
+
+/** 担当者 (マージされたあとに動く人) を変える。null なら申請者が動く */
+export async function setAssigneeAction(id: string, assigneeId: string | null): Promise<Result> {
+  const r = await attempt(() =>
+    apiFetch(`/requests/${id}/assignee`, { method: 'PUT', body: JSON.stringify({ assignee_id: assigneeId }) }),
+  );
+  revalidatePath(`/requests/${id}`);
+  revalidatePath('/requests');
   return r;
 }
 

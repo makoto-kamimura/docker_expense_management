@@ -12,14 +12,15 @@ use crate::{
     handlers::{
         chores,
         labels::{labels_of, replace_labels},
-        notifications::{self, notify, Notify},
+        notifications::{self, notify, notify_users, Notify, Parties},
         request_types,
     },
     previews, push,
     models::{
-        ActionInput, LinkPreview, RequestCategory, AlternativeInput, AlternativeProduct, Attachment, CommentInput, ListQuery,
-        Member, Permissions, PurchaseInput, PurchaseRequest, RequestDetail, RequestInput, RequestKind,
-        RequestCounts, RequestListItem, RequestRef, RequestStatus, Reviewer, ReviewerDecision, TimelineEntry, UserRef,
+        ActionInput, AssigneeInput, LinkPreview, RequestCategory, AlternativeInput, AlternativeProduct, Attachment, CommentInput,
+        ListQuery, Member, PendingReply, Permissions, PurchaseInput, PurchaseRequest, ReplyAsk, RequestDetail, RequestInput,
+        RequestKind, RequestCounts, RequestListItem, RequestRef, RequestStatus, Reviewer, ReviewerDecision, TimelineEntry,
+        UserRef,
     },
     state::AppState,
 };
@@ -53,6 +54,11 @@ fn reviewer_ids(reviewers: &[Reviewer]) -> Vec<Uuid> {
     reviewers.iter().map(|r| r.id).collect()
 }
 
+/// 通知の受け取り手を決めるための当事者
+fn parties<'a>(r: &PurchaseRequest, reviewer_ids: &'a [Uuid]) -> Parties<'a> {
+    Parties { requester_id: r.requester_id, reviewer_ids, assignee_id: r.assignee_id }
+}
+
 pub async fn reviewers_of(state: &AppState, request_id: Uuid) -> ApiResult<Vec<Reviewer>> {
     Ok(sqlx::query_as(
         "SELECT u.id, u.name, u.avatar_url, rr.decision, rr.decided_at
@@ -69,6 +75,9 @@ pub fn permissions(me: &Member, r: &PurchaseRequest, reviewers: &[Reviewer]) -> 
     use RequestStatus::*;
     let is_requester = r.requester_id == me.id;
     let is_reviewer = reviewers.iter().any(|x| x.id == me.id);
+    let is_assignee = r.assignee_id == Some(me.id);
+    // マージされたあとに動く人 (担当者。いなければ申請者)
+    let is_actor = r.actor_id() == me.id;
     let s = r.status;
     let has_approval_tasks = r.approval_tasks.as_deref().is_some_and(|t| !t.trim().is_empty());
     Permissions {
@@ -78,17 +87,18 @@ pub fn permissions(me: &Member, r: &PurchaseRequest, reviewers: &[Reviewer]) -> 
         can_request_changes: is_reviewer && s.is_in_review(),
         can_reject: is_reviewer && (s.is_in_review() || matches!(s, ChangesNeeded | Approved)),
         can_merge: (is_requester || is_reviewer) && s == Approved,
-        can_mark_purchased: is_requester && s == Merged,
+        can_mark_purchased: is_actor && s == Merged,
         can_close: is_requester && s != Draft && !s.is_finished(),
         // 申請者は自分の稟議を、管理者はグループの稟議を、状態に関係なく消せる (他人の下書きはそもそも見えない)
         can_delete: is_requester || me.is_admin,
         can_comment: s != Draft || is_requester,
         can_upload_evidence: is_requester && !s.is_finished(),
-        can_upload_receipt: is_requester && matches!(s, Merged | Purchased),
+        can_upload_receipt: (is_requester || is_actor) && matches!(s, Merged | Purchased),
         // クローズ (却下・取り下げ) は当事者が戻せる。承認後は、お願いが済んでいないときに申請者だけが戻せる
         can_reopen: ((is_requester || is_reviewer) && s == Closed)
             || (is_requester && matches!(s, Approved | Merged) && has_approval_tasks),
         can_label: is_requester || is_reviewer,
+        can_assign: (is_requester || is_reviewer || is_assignee) && !s.is_finished(),
     }
 }
 
@@ -118,14 +128,34 @@ pub async fn log_activity<'e, E: PgExecutor<'e>>(
     Ok(())
 }
 
-async fn add_comment(conn: &mut PgConnection, request_id: Uuid, user_id: Uuid, body: &str) -> ApiResult<()> {
-    sqlx::query("INSERT INTO comments (request_id, user_id, body) VALUES ($1, $2, $3)")
+/// コメントを残し、書いた人宛ての返事のお願い (まだ返事をしていないもの) を返事済みにする。
+/// コメントの ID と、返事を受け取る人 (お願いした人) を返す
+async fn add_comment(conn: &mut PgConnection, request_id: Uuid, user_id: Uuid, body: &str) -> ApiResult<(Uuid, Vec<Uuid>)> {
+    let (id,): (Uuid,) = sqlx::query_as("INSERT INTO comments (request_id, user_id, body) VALUES ($1, $2, $3) RETURNING id")
         .bind(request_id)
         .bind(user_id)
         .bind(body)
-        .execute(conn)
+        .fetch_one(&mut *conn)
         .await?;
-    Ok(())
+    let askers: Vec<(Option<Uuid>,)> = sqlx::query_as(
+        "UPDATE reply_requests q SET answered_at = now()
+           FROM comments c
+          WHERE c.id = q.comment_id AND q.request_id = $1 AND q.user_id = $2 AND q.answered_at IS NULL
+          RETURNING c.user_id",
+    )
+    .bind(request_id)
+    .bind(user_id)
+    .fetch_all(&mut *conn)
+    .await?;
+    let mut askers: Vec<Uuid> = askers.into_iter().filter_map(|(a,)| a).collect();
+    askers.sort();
+    askers.dedup();
+    Ok((id, askers))
+}
+
+/// 退会したメンバーは None
+fn user_ref(id: Option<Uuid>, name: Option<String>, avatar_url: Option<String>) -> Option<UserRef> {
+    id.zip(name).map(|(id, name)| UserRef { id, name, avatar_url })
 }
 
 async fn timeline(state: &AppState, request_id: Uuid) -> ApiResult<Vec<TimelineEntry>> {
@@ -147,22 +177,34 @@ async fn timeline(state: &AppState, request_id: Uuid) -> ApiResult<Vec<TimelineE
     .bind(request_id)
     .fetch_all(&state.db)
     .await?;
+    // コメントで返事をお願いした相手 (コメントごと)
+    type AskRow = (Uuid, Uuid, String, Option<String>, Option<chrono::DateTime<chrono::Utc>>);
+    let asks: Vec<AskRow> = sqlx::query_as(
+        "SELECT q.comment_id, u.id, u.name, u.avatar_url, q.answered_at
+           FROM reply_requests q JOIN users u ON u.id = q.user_id
+          WHERE q.request_id = $1 ORDER BY u.name",
+    )
+    .bind(request_id)
+    .fetch_all(&state.db)
+    .await?;
+    let mut asked: std::collections::HashMap<Uuid, Vec<ReplyAsk>> = std::collections::HashMap::new();
+    for (comment_id, id, name, avatar_url, answered_at) in asks {
+        asked.entry(comment_id).or_default().push(ReplyAsk { user: UserRef { id, name, avatar_url }, answered_at });
+    }
 
-    let user = |id: Option<Uuid>, name: Option<String>, avatar_url: Option<String>| {
-        id.zip(name).map(|(id, name)| UserRef { id, name, avatar_url })
-    };
     let mut entries: Vec<TimelineEntry> = comments
         .into_iter()
         .map(|(id, body, created_at, uid, name, avatar)| TimelineEntry::Comment {
             id,
-            user: user(uid, name, avatar),
+            user: user_ref(uid, name, avatar),
             body,
+            asked: asked.remove(&id).unwrap_or_default(),
             created_at,
         })
         .chain(events.into_iter().map(|(id, action, metadata, created_at, uid, name, avatar)| {
             TimelineEntry::Event {
                 id,
-                user: user(uid, name, avatar),
+                user: user_ref(uid, name, avatar),
                 action,
                 metadata,
                 created_at,
@@ -172,6 +214,41 @@ async fn timeline(state: &AppState, request_id: Uuid) -> ApiResult<Vec<TimelineE
     // 同時刻 (承認 + コメントなど) は操作 → コメントの順に並べる
     entries.sort_by_key(|e| (e.created_at(), matches!(e, TimelineEntry::Comment { .. })));
     Ok(entries)
+}
+
+/// まだ返事が来ていない返事のお願い (古い順)
+async fn pending_replies(state: &AppState, request_id: Uuid) -> ApiResult<Vec<PendingReply>> {
+    type Row = (
+        Uuid,
+        chrono::DateTime<chrono::Utc>,
+        Uuid,
+        String,
+        Option<String>,
+        Option<Uuid>,
+        Option<String>,
+        Option<String>,
+    );
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT q.comment_id, q.created_at, u.id, u.name, u.avatar_url, a.id, a.name, a.avatar_url
+           FROM reply_requests q
+           JOIN users u ON u.id = q.user_id
+           JOIN comments c ON c.id = q.comment_id
+           LEFT JOIN users a ON a.id = c.user_id
+          WHERE q.request_id = $1 AND q.answered_at IS NULL
+          ORDER BY q.created_at, u.name",
+    )
+    .bind(request_id)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(comment_id, created_at, uid, name, avatar_url, aid, aname, aavatar)| PendingReply {
+            comment_id,
+            asker: user_ref(aid, aname, aavatar),
+            user: UserRef { id: uid, name, avatar_url },
+            created_at,
+        })
+        .collect())
 }
 
 async fn build_detail(state: &AppState, me: &Member, request: PurchaseRequest) -> ApiResult<RequestDetail> {
@@ -185,13 +262,17 @@ async fn build_detail(state: &AppState, me: &Member, request: PurchaseRequest) -
         .bind(request.requester_id)
         .fetch_one(&state.db)
         .await?;
-    let merged_by: Option<UserRef> = match request.merged_by {
-        Some(uid) => sqlx::query_as("SELECT id, name, avatar_url FROM users WHERE id = $1")
-            .bind(uid)
-            .fetch_optional(&state.db)
-            .await?,
-        None => None,
+    let user_by_id = |uid: Option<Uuid>| async move {
+        match uid {
+            Some(uid) => sqlx::query_as::<_, UserRef>("SELECT id, name, avatar_url FROM users WHERE id = $1")
+                .bind(uid)
+                .fetch_optional(&state.db)
+                .await,
+            None => Ok(None),
+        }
     };
+    let merged_by = user_by_id(request.merged_by).await?;
+    let assignee = user_by_id(request.assignee_id).await?;
     let alternatives: Vec<AlternativeProduct> = sqlx::query_as(
         "SELECT id, position, name, price, url, notes FROM alternative_products
           WHERE request_id = $1 ORDER BY position",
@@ -205,6 +286,7 @@ async fn build_detail(state: &AppState, me: &Member, request: PurchaseRequest) -
             .fetch_all(&state.db)
             .await?;
     let timeline = timeline(state, id).await?;
+    let pending_replies = pending_replies(state, id).await?;
     let permissions = permissions(me, &request, &reviewers);
     const REF_SELECT: &str = "SELECT r.id, r.title, r.kind, r.type_id, r.status, u.name AS requester_name
            FROM purchase_requests r JOIN users u ON u.id = r.requester_id";
@@ -250,11 +332,13 @@ async fn build_detail(state: &AppState, me: &Member, request: PurchaseRequest) -
         children,
         family_name,
         requester,
+        assignee,
         merged_by,
         reviewers,
         alternatives,
         attachments,
         timeline,
+        pending_replies,
         permissions,
     })
 }
@@ -284,6 +368,7 @@ pub async fn list(
         "SELECT r.*, u.name AS requester_name,
                 ARRAY(SELECT u2.name FROM request_reviewers rr JOIN users u2 ON u2.id = rr.user_id
                        WHERE rr.request_id = r.id ORDER BY u2.name) AS reviewer_names,
+                (SELECT au.name FROM users au WHERE au.id = r.assignee_id) AS assignee_name,
                 (SELECT COUNT(*) FROM comments c WHERE c.request_id = r.id) AS comment_count,
                 (SELECT lp.id FROM link_previews lp
                   WHERE lp.url = COALESCE(r.final_product_url, r.product_url)
@@ -310,6 +395,8 @@ pub async fn list(
     b.push_bind(me.id).push(")) AS children_count, ");
     push_filter(&mut b, &me, MY_TURN);
     b.push(" AS my_turn, ");
+    push_filter(&mut b, &me, ASKED_TO_REPLY);
+    b.push(" AS asked_to_reply, ");
     push_filter(&mut b, &me, VIEWER_ROLE);
     b.push(
         " AS viewer_role
@@ -337,24 +424,41 @@ pub async fn list(
     Ok(Json(b.build_query_as().fetch_all(&state.db).await?))
 }
 
+/// 自分宛ての返事のお願いで、まだ返事をしていないものがある
+macro_rules! asked_sql {
+    () => {
+        "EXISTS (SELECT 1 FROM reply_requests q WHERE q.request_id = r.id AND q.user_id = {me} AND q.answered_at IS NULL)"
+    };
+}
+const ASKED_TO_REPLY: &str = asked_sql!();
+
 /// 次に動くのが自分か (ボールを持っているか)。`{me}` はログインユーザーの ID に置き換える。
-/// レビュー待ち = まだ判定していないレビュアー / 再確認の依頼・下書き・マージ済み = 申請者 / 承認済み = マージできる当事者
+/// レビュー待ち = まだ判定していないレビュアー / 再確認の依頼・下書き = 申請者 / 承認済み = マージできる当事者 /
+/// マージ済み = 担当者 (いなければ申請者)。状態に関係なく、返事のお願いが来ていれば自分の番
 macro_rules! my_turn_sql {
     () => {
-        "(CASE
-            WHEN r.status IN ('draft', 'changes_needed', 'merged') THEN r.requester_id = {me}
-            WHEN r.status IN ('submitted', 'under_review') THEN EXISTS (
-                SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me} AND rr.decision = 'pending')
-            WHEN r.status = 'approved' THEN r.requester_id = {me} OR EXISTS (
-                SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me})
-            ELSE FALSE END)"
+        concat!(
+            "((CASE
+                WHEN r.status IN ('draft', 'changes_needed') THEN r.requester_id = {me}
+                WHEN r.status = 'merged' THEN COALESCE(r.assignee_id, r.requester_id) = {me}
+                WHEN r.status IN ('submitted', 'under_review') THEN EXISTS (
+                    SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me} AND rr.decision = 'pending')
+                WHEN r.status = 'approved' THEN r.requester_id = {me} OR EXISTS (
+                    SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me})
+                ELSE FALSE END) OR ",
+            asked_sql!(),
+            ")"
+        )
     };
 }
 pub const MY_TURN: &str = my_turn_sql!();
-/// 自分が当事者 (申請者・レビュアー) の進行中の稟議で、相手の対応を待っているもの
+/// 自分が当事者 (申請者・レビュアー・担当者) の進行中の稟議か、自分が返事をお願いした稟議で、相手の対応を待っているもの
 pub const THEIR_TURN: &str = concat!(
-    "r.status IN ('submitted', 'under_review', 'changes_needed', 'approved', 'merged')
-     AND (r.requester_id = {me} OR EXISTS (SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me}))
+    "((r.status IN ('submitted', 'under_review', 'changes_needed', 'approved', 'merged')
+       AND (r.requester_id = {me} OR r.assignee_id = {me}
+            OR EXISTS (SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me})))
+      OR EXISTS (SELECT 1 FROM reply_requests q JOIN comments c ON c.id = q.comment_id
+                  WHERE q.request_id = r.id AND c.user_id = {me} AND q.answered_at IS NULL))
      AND NOT ",
     my_turn_sql!()
 );
@@ -495,13 +599,14 @@ pub async fn create(
         .bind(me.family_id)
         .fetch_one(&state.db)
         .await?;
+    let assignee = resolve_assignee(&state.db, &me, me.id, input.assignee_id.flatten()).await?;
 
     let mut tx = state.db.begin().await?;
     let (id,): (Uuid,) = sqlx::query_as(
         "INSERT INTO purchase_requests
             (family_id, requester_id, title, reason, price, currency, seller, product_name,
-             product_url, category, planned_date, notes, kind, end_date, parent_id, type_id, approval_tasks)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id",
+             product_url, category, planned_date, notes, kind, end_date, parent_id, type_id, approval_tasks, assignee_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id",
     )
     .bind(me.family_id)
     .bind(me.id)
@@ -520,6 +625,7 @@ pub async fn create(
     .bind(parent.as_ref().map(|p| p.id))
     .bind(type_id)
     .bind(clean(&input.approval_tasks))
+    .bind(assignee)
     .fetch_one(&mut *tx)
     .await?;
     replace_reviewers(&mut tx, &me, id, &input.reviewer_ids).await?;
@@ -556,6 +662,11 @@ pub async fn update(
     } else {
         (None, None)
     };
+    // 担当者は、送られたときだけ変える (送られなければ今のまま)
+    let assignee = match input.assignee_id {
+        Some(v) => resolve_assignee(&state.db, &me, old.requester_id, v).await?,
+        None => old.assignee_id,
+    };
 
     // 変更履歴: 項目ごとに「変更前 → 変更後」を Activity に残す
     let mut changes: Vec<Value> = Vec::new();
@@ -579,6 +690,13 @@ pub async fn update(
     diff("end date", json!(old.end_date), json!(input.end_date));
     diff("notes", json!(old.notes), json!(clean(&input.notes)));
     diff("approval tasks", json!(old.approval_tasks), json!(clean(&input.approval_tasks)));
+    if assignee != old.assignee_id {
+        diff(
+            "assignee",
+            json!(user_name(&state.db, old.assignee_id).await?),
+            json!(user_name(&state.db, assignee).await?),
+        );
+    }
 
     let mut old_ids: Vec<Uuid> = reviewers.iter().map(|r| r.id).collect();
     let mut new_ids = input.reviewer_ids.clone();
@@ -623,8 +741,8 @@ pub async fn update(
         "UPDATE purchase_requests
             SET title = $1, reason = $2, price = $3, seller = $4, product_name = $5,
                 product_url = $6, category = COALESCE($7, category), planned_date = $8, notes = $9,
-                kind = $10, end_date = $11, type_id = $12, approval_tasks = $13
-          WHERE id = $14",
+                kind = $10, end_date = $11, type_id = $12, approval_tasks = $13, assignee_id = $14
+          WHERE id = $15",
     )
     .bind(input.title.trim())
     .bind(input.reason.trim())
@@ -639,6 +757,7 @@ pub async fn update(
     .bind(input.end_date)
     .bind(type_id)
     .bind(clean(&input.approval_tasks))
+    .bind(assignee)
     .bind(id)
     .execute(&mut *tx)
     .await?;
@@ -655,12 +774,87 @@ pub async fn update(
         }
     }
     // Draft 中の編集は記録しない (まだ誰も見ていないため)
+    let mut sent = Vec::new();
     if !changed.is_empty() && old.status != RequestStatus::Draft {
         log_activity(&mut *tx, id, me.id, "updated", json!({ "fields": changed, "changes": changes })).await?;
+        // 新しい担当者に知らせる
+        if assignee != old.assignee_id {
+            let ids = reviewer_ids(&reviewers);
+            let p = Parties { requester_id: old.requester_id, reviewer_ids: &ids, assignee_id: assignee };
+            sent = notify(&mut tx, id, me.id, Notify::Assigned, &p).await?;
+        }
     }
     tx.commit().await?;
+    push::deliver(&state, sent);
     previews::ensure(&state, preview_urls(&input));
     detail_json(&state, &me, id).await
+}
+
+/// 担当者 (マージされたあとに動く人) を変える。申請者・レビュアー・担当者が、完了・クローズ以外で変えられる
+pub async fn set_assignee(
+    State(state): State<AppState>,
+    AuthUser(me): AuthUser,
+    Path(id): Path<Uuid>,
+    Json(input): Json<AssigneeInput>,
+) -> ApiResult<Json<RequestDetail>> {
+    let req = load_request(&state, &me, id).await?;
+    let reviewers = reviewers_of(&state, id).await?;
+    if !permissions(&me, &req, &reviewers).can_assign {
+        let is_party =
+            req.requester_id == me.id || req.assignee_id == Some(me.id) || reviewers.iter().any(|r| r.id == me.id);
+        return Err(deny(is_party));
+    }
+    let assignee = resolve_assignee(&state.db, &me, req.requester_id, input.assignee_id).await?;
+    if assignee == req.assignee_id {
+        return detail_json(&state, &me, id).await;
+    }
+    let mut tx = state.db.begin().await?;
+    sqlx::query("UPDATE purchase_requests SET assignee_id = $1 WHERE id = $2")
+        .bind(assignee)
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+    // 下書き中の変更は記録しない (まだ誰も見ていないため)
+    let mut sent = Vec::new();
+    if req.status != RequestStatus::Draft {
+        let meta = json!({
+            "assignee_name": user_name(&state.db, assignee).await?,
+            "previous_name": user_name(&state.db, req.assignee_id).await?,
+        });
+        log_activity(&mut *tx, id, me.id, "assigned", meta).await?;
+        let ids = reviewer_ids(&reviewers);
+        let p = Parties { requester_id: req.requester_id, reviewer_ids: &ids, assignee_id: assignee };
+        sent = notify(&mut tx, id, me.id, Notify::Assigned, &p).await?;
+    }
+    tx.commit().await?;
+    push::deliver(&state, sent);
+    detail_json(&state, &me, id).await
+}
+
+/// 担当者を決める。グループのメンバーに限り、申請者自身なら None (申請者が動く)
+async fn resolve_assignee(db: &sqlx::PgPool, me: &Member, requester_id: Uuid, id: Option<Uuid>) -> ApiResult<Option<Uuid>> {
+    let Some(id) = id.filter(|id| *id != requester_id) else {
+        return Ok(None);
+    };
+    let (found,): (bool,) =
+        sqlx::query_as("SELECT EXISTS (SELECT 1 FROM family_members WHERE family_id = $1 AND user_id = $2)")
+            .bind(me.family_id)
+            .bind(id)
+            .fetch_one(db)
+            .await?;
+    if !found {
+        return Err(ApiError::BadRequest("担当者はグループのメンバーから選んでください".into()));
+    }
+    Ok(Some(id))
+}
+
+/// 変更履歴に残す名前 (None は「申請者」として表示する)
+async fn user_name(db: &sqlx::PgPool, id: Option<Uuid>) -> ApiResult<Option<String>> {
+    let Some(id) = id else {
+        return Ok(None);
+    };
+    let row: Option<(String,)> = sqlx::query_as("SELECT name FROM users WHERE id = $1").bind(id).fetch_optional(db).await?;
+    Ok(row.map(|(n,)| n))
 }
 
 pub async fn delete(
@@ -746,7 +940,7 @@ pub async fn submit(
         .await?;
     log_activity(&mut *tx, id, me.id, action, snapshot).await?;
     let kind = if action == "resubmitted" { Notify::Resubmitted } else { Notify::ReviewRequested };
-    let sent = notify(&mut tx, id, me.id, kind, req.requester_id, &reviewer_ids(&reviewers)).await?;
+    let sent = notify(&mut tx, id, me.id, kind, &parties(&req, &reviewer_ids(&reviewers))).await?;
     // 分岐した稟議を初めて申請したら、分岐元のアクティビティにも残す
     if let (Some(pid), "submitted") = (req.parent_id, action) {
         let already: (bool,) = sqlx::query_as(
@@ -825,7 +1019,7 @@ async fn review(state: &AppState, me: &Member, id: Uuid, kind: Review, input: Ac
     if let Some(body) = &comment {
         add_comment(&mut tx, id, me.id, body).await?;
     }
-    let sent = notify(&mut tx, id, me.id, notice, req.requester_id, &reviewer_ids(&reviewers)).await?;
+    let sent = notify(&mut tx, id, me.id, notice, &parties(&req, &reviewer_ids(&reviewers))).await?;
     tx.commit().await?;
     push::deliver(state, sent);
     detail_json(state, me, id).await
@@ -877,7 +1071,7 @@ pub async fn merge(
         .execute(&mut *tx)
         .await?;
     log_activity(&mut *tx, id, me.id, "merged", json!({})).await?;
-    let sent = notify(&mut tx, id, me.id, Notify::Merged, req.requester_id, &reviewer_ids(&reviewers)).await?;
+    let sent = notify(&mut tx, id, me.id, Notify::Merged, &parties(&req, &reviewer_ids(&reviewers))).await?;
     tx.commit().await?;
     push::deliver(&state, sent);
     detail_json(&state, &me, id).await
@@ -893,7 +1087,7 @@ pub async fn mark_purchased(
     let req = load_request(&state, &me, id).await?;
     let reviewers = reviewers_of(&state, id).await?;
     if !permissions(&me, &req, &reviewers).can_mark_purchased {
-        return Err(deny(req.requester_id == me.id));
+        return Err(deny(req.actor_id() == me.id));
     }
     if !(0..=MAX_PRICE).contains(&input.actual_price) {
         return Err(ApiError::BadRequest("購入金額が正しくありません".into()));
@@ -917,7 +1111,9 @@ pub async fn mark_purchased(
     .execute(&mut *tx)
     .await?;
     log_activity(&mut *tx, id, me.id, "purchased", json!({ "actual_price": input.actual_price })).await?;
+    let sent = notify(&mut tx, id, me.id, Notify::Purchased, &parties(&req, &reviewer_ids(&reviewers))).await?;
     tx.commit().await?;
+    push::deliver(&state, sent);
     previews::ensure(&state, final_url);
     detail_json(&state, &me, id).await
 }
@@ -995,7 +1191,7 @@ pub async fn reopen(
     if let Some(body) = &comment {
         add_comment(&mut tx, id, me.id, body).await?;
     }
-    let sent = notify(&mut tx, id, me.id, Notify::Reopened, req.requester_id, &reviewer_ids(&reviewers)).await?;
+    let sent = notify(&mut tx, id, me.id, Notify::Reopened, &parties(&req, &reviewer_ids(&reviewers))).await?;
     tx.commit().await?;
     push::deliver(&state, sent);
     detail_json(&state, &me, id).await
@@ -1017,6 +1213,25 @@ pub async fn comment(
         return Err(ApiError::BadRequest("コメントを入力してください".into()));
     }
     check_text_len(body, "コメント")?;
+    // 返事をお願いする相手は、自分以外のグループのメンバー。下書きはほかの人に見えないのでお願いできない
+    let mut ask_ids = input.ask_ids.clone();
+    ask_ids.retain(|uid| *uid != me.id);
+    ask_ids.sort();
+    ask_ids.dedup();
+    if !ask_ids.is_empty() {
+        if req.status == RequestStatus::Draft {
+            return Err(ApiError::BadRequest("下書きでは返事をお願いできません".into()));
+        }
+        let (found,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM family_members WHERE family_id = $1 AND user_id = ANY($2)")
+                .bind(me.family_id)
+                .bind(&ask_ids)
+                .fetch_one(&state.db)
+                .await?;
+        if found as usize != ask_ids.len() {
+            return Err(ApiError::BadRequest("返事をお願いする相手は、グループのメンバーから選んでください".into()));
+        }
+    }
     let mut tx = state.db.begin().await?;
     // Reviewer がコメントしたら「確認中」に進める
     if req.status == RequestStatus::Submitted && reviewers.iter().any(|r| r.id == me.id) {
@@ -1026,8 +1241,19 @@ pub async fn comment(
             .await?;
         log_activity(&mut *tx, id, me.id, "started_review", json!({})).await?;
     }
-    add_comment(&mut tx, id, me.id, body).await?;
+    let (comment_id, askers) = add_comment(&mut tx, id, me.id, body).await?;
+    sqlx::query("INSERT INTO reply_requests (request_id, comment_id, user_id) SELECT $1, $2, UNNEST($3::uuid[])")
+        .bind(id)
+        .bind(comment_id)
+        .bind(&ask_ids)
+        .execute(&mut *tx)
+        .await?;
+    let mut sent = notify_users(&mut tx, id, me.id, Notify::ReplyRequested, &ask_ids).await?;
+    // 返事をもらった人に知らせる。続けてその人に返事をお願いしたときは、返事のお願いの通知だけにする
+    let replied: Vec<Uuid> = askers.into_iter().filter(|uid| !ask_ids.contains(uid)).collect();
+    sent.extend(notify_users(&mut tx, id, me.id, Notify::Replied, &replied).await?);
     tx.commit().await?;
+    push::deliver(&state, sent);
     detail_json(&state, &me, id).await
 }
 
@@ -1232,6 +1458,7 @@ mod tests {
             end_date: None,
             notes: None,
             approval_tasks: None,
+            assignee_id: None,
             status,
             submitted_at: None,
             approved_at: None,
@@ -1313,6 +1540,59 @@ mod tests {
         let r = request(me.id, RequestStatus::Closed);
         assert!(permissions(&me, &r, &reviewers).can_reopen);
         assert!(permissions(&reviewer, &r, &reviewers).can_reopen);
+    }
+
+    #[test]
+    fn requester_acts_after_merge_when_no_assignee() {
+        let me = member(false);
+        let p = permissions(&me, &request(me.id, RequestStatus::Merged), &[]);
+        assert!(p.can_mark_purchased && p.can_upload_receipt);
+    }
+
+    #[test]
+    fn assignee_acts_after_merge_instead_of_requester() {
+        let requester = member(false);
+        let assignee = member(false);
+        let r = PurchaseRequest { assignee_id: Some(assignee.id), ..request(requester.id, RequestStatus::Merged) };
+        let by_assignee = permissions(&assignee, &r, &[]);
+        assert!(by_assignee.can_mark_purchased && by_assignee.can_upload_receipt);
+        // 申請者は購入済みにはできないが、レシートは添付できる
+        let by_requester = permissions(&requester, &r, &[]);
+        assert!(!by_requester.can_mark_purchased && by_requester.can_upload_receipt);
+        // マージ前は担当者でも購入済みにできない
+        let approved = PurchaseRequest { status: RequestStatus::Approved, ..r };
+        assert!(!permissions(&assignee, &approved, &[]).can_mark_purchased);
+    }
+
+    #[test]
+    fn parties_can_change_assignee_until_finished() {
+        let requester = member(false);
+        let reviewer = member(false);
+        let assignee = member(false);
+        let other = member(false);
+        let reviewers = [reviewer_of(&reviewer)];
+        for st in [RequestStatus::UnderReview, RequestStatus::Approved, RequestStatus::Merged] {
+            let r = PurchaseRequest { assignee_id: Some(assignee.id), ..request(requester.id, st) };
+            for m in [&requester, &reviewer, &assignee] {
+                assert!(permissions(m, &r, &reviewers).can_assign, "{st:?}");
+            }
+            assert!(!permissions(&other, &r, &reviewers).can_assign, "{st:?}");
+        }
+        for st in [RequestStatus::Purchased, RequestStatus::Closed] {
+            assert!(!permissions(&requester, &request(requester.id, st), &reviewers).can_assign, "{st:?}");
+        }
+    }
+
+    #[test]
+    fn assignee_is_unchanged_when_omitted_and_cleared_when_null() {
+        let parse = |v: serde_json::Value| -> RequestInput { serde_json::from_value(v).unwrap() };
+        let omitted = parse(serde_json::json!({ "title": "t", "price": 1 }));
+        assert_eq!(omitted.assignee_id, None);
+        let cleared = parse(serde_json::json!({ "title": "t", "price": 1, "assignee_id": null }));
+        assert_eq!(cleared.assignee_id, Some(None));
+        let id = Uuid::new_v4();
+        let set = parse(serde_json::json!({ "title": "t", "price": 1, "assignee_id": id }));
+        assert_eq!(set.assignee_id, Some(Some(id)));
     }
 
     fn input(title: &str, reason: &str) -> RequestInput {

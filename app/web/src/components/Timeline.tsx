@@ -19,6 +19,7 @@ const EVENT_ICON: Record<string, IconName> = {
   attachment_added: 'paperclip',
   attachment_removed: 'paperclip',
   labeled: 'tag',
+  assigned: 'person',
 };
 
 /** Activity: コメントと操作履歴を時系列で表示する (GitHub PR の Conversation 風) */
@@ -48,6 +49,23 @@ export default function Timeline({
                 {e.user?.id === requesterId && <span className="label label-muted">申請者</span>}
               </div>
               <div className="box-body"><Markdown>{e.body}</Markdown></div>
+              {(e.asked ?? []).length > 0 && (
+                // このコメントで返事をお願いした相手と、返事をしたか
+                <div className="ask-line">
+                  <Octicon name="reply" size={12} />
+                  {e.asked.map((a) => (
+                    <span
+                      key={a.user.id}
+                      className={`ask-tag${a.answered_at ? ' ask-done' : ''}`}
+                      title={a.answered_at ? `${fmtDateTime(a.answered_at)}に返事` : '返事待ち'}
+                    >
+                      {a.user.name}
+                      {a.answered_at ? <><Octicon name="check" size={12} /> 返事済み</> : ' · 返事待ち'}
+                    </span>
+                  ))}
+                  <span>に返事をお願いしました</span>
+                </div>
+              )}
             </div>
           </div>
         ) : (

@@ -86,6 +86,8 @@ export interface PurchaseRequest {
   notes: string | null;
   /** 承認したらしてほしいこと (Markdown) */
   approval_tasks: string | null;
+  /** 担当者 (マージされたあとに動く人)。null なら申請者が動く */
+  assignee_id: string | null;
   status: RequestStatus;
   submitted_at: string | null;
   approved_at: string | null;
@@ -105,6 +107,8 @@ export interface PurchaseRequest {
 export interface RequestListItem extends PurchaseRequest {
   requester_name: string;
   reviewer_names: string[];
+  /** 担当者の名前 (null なら申請者が動く) */
+  assignee_name: string | null;
   comment_count: number;
   /** 商品URL のプレビュー画像 ID */
   preview_id: string | null;
@@ -117,6 +121,8 @@ export interface RequestListItem extends PurchaseRequest {
   children_count: number;
   /** 次に動くのが自分か (ボールを持っているか) */
   my_turn: boolean;
+  /** 自分に、まだ返事をしていない返事のお願いが来ているか */
+  asked_to_reply: boolean;
   /** 自分の立場 */
   viewer_role: ViewerRole;
 }
@@ -180,8 +186,24 @@ export interface Attachment {
   created_at: string;
 }
 
+/** コメントで返事をお願いした相手と、返事をしたか */
+export interface ReplyAsk {
+  user: UserRef;
+  answered_at: string | null;
+}
+
+/** まだ返事が来ていない返事のお願い */
+export interface PendingReply {
+  comment_id: string;
+  /** お願いした人 (退会していれば null) */
+  asker: UserRef | null;
+  /** お願いされた人 */
+  user: UserRef;
+  created_at: string;
+}
+
 export type TimelineEntry =
-  | { type: 'comment'; id: string; user: UserRef | null; body: string; created_at: string }
+  | { type: 'comment'; id: string; user: UserRef | null; body: string; asked: ReplyAsk[]; created_at: string }
   | {
       type: 'event';
       id: string;
@@ -207,6 +229,8 @@ export interface Permissions {
   can_reopen: boolean;
   /** ラベルの付け外し (申請者とレビュアー) */
   can_label: boolean;
+  /** 担当者の変更 (申請者・レビュアー・担当者。完了・クローズ以外) */
+  can_assign: boolean;
 }
 
 /** 分岐元・分岐先の稟議 */
@@ -226,12 +250,16 @@ export interface RequestDetail {
   children: RequestRef[];
   family_name: string;
   requester: UserRef;
+  /** 担当者 (null なら申請者が動く) */
+  assignee: UserRef | null;
   merged_by: UserRef | null;
   reviewers: Reviewer[];
   labels: Label[];
   alternatives: AlternativeProduct[];
   attachments: Attachment[];
   timeline: TimelineEntry[];
+  /** まだ返事が来ていない返事のお願い (古い順) */
+  pending_replies: PendingReply[];
   permissions: Permissions;
   previews: LinkPreview[];
   /** 申請者の家事の実績 (レビューの判断材料) */
@@ -344,6 +372,9 @@ export interface KindText {
   thing: string;
   mergeSub: string;
   mergedSub: string;
+  /** 3段の流れの「実行」で、実行する人がすること */
+  actVerb: string;
+  /** 「(実行する人) の○○を待っています」の○○ */
   waitingDone: string;
   done: string;
   doneSub: string;
@@ -392,7 +423,8 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
     thing: 'この購入',
     mergeSub: '承認を確定して、購入を許可します。',
     mergedSub: '稟議が成立しました。購入して、購入済みにしましょう。',
-    waitingDone: '申請者の購入を待っています。',
+    actVerb: '購入する',
+    waitingDone: '購入',
     done: '購入済み',
     doneSub: '購入が完了しました。',
     doneEvent: '購入済みにしました',
@@ -434,7 +466,8 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
     thing: 'このお出かけ',
     mergeSub: '承認を確定して、お出かけを決定します。',
     mergedSub: '稟議が成立しました。出かけたら「行ってきた」にしましょう。',
-    waitingDone: '申請者の報告を待っています。',
+    actVerb: '行く',
+    waitingDone: '報告',
     done: '行ってきた',
     doneSub: 'お出かけが完了しました。',
     doneEvent: '「行ってきた」にしました',
@@ -476,7 +509,8 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
     thing: 'このやりたいこと',
     mergeSub: '承認を確定して、やることを決定します。',
     mergedSub: '稟議が成立しました。やったら「やった」にしましょう。',
-    waitingDone: '申請者の報告を待っています。',
+    actVerb: 'やる',
+    waitingDone: '報告',
     done: 'やった',
     doneSub: 'やりたいことが実現しました。',
     doneEvent: '「やった」にしました',
@@ -532,6 +566,11 @@ export function statusLabel(kind: RequestKind, status: RequestStatus, viewer?: V
 export function statusHint(status: RequestStatus, viewer?: ViewerRole): string {
   if (status === 'changes_needed' && viewer) return CHANGES_NEEDED_HINT[viewer];
   return STATUS_HINT[status];
+}
+
+/** マージされたあとに動く人 (担当者。いなければ申請者) */
+export function actorOf(d: Pick<RequestDetail, 'requester' | 'assignee'>): UserRef {
+  return d.assignee ?? d.requester;
 }
 
 /** 詳細画面での自分の立場 */
@@ -720,7 +759,11 @@ export type NotificationKind =
   | 'changes_requested'
   | 'approved'
   | 'rejected'
-  | 'merged';
+  | 'merged'
+  | 'assigned'
+  | 'purchased'
+  | 'reply_requested'
+  | 'replied';
 
 /** 自分宛ての通知 (GET /notifications) */
 export interface NotificationItem {

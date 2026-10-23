@@ -15,6 +15,10 @@ const KIND_ICON: Record<NotificationKind, string> = {
   approved: '✅',
   rejected: '✖️',
   merged: '🟣',
+  assigned: '🙋',
+  purchased: '🛍',
+  reply_requested: '💬',
+  replied: '💬',
 };
 
 /** 自分宛ての通知。稟議を開くと、その稟議の通知は既読になる (OS の通知は Web だけ) */
