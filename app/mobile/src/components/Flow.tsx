@@ -1,10 +1,13 @@
-import { Text, View } from 'react-native';
-import { flowSteps, type FlowState } from '@/format';
+import { Pressable, Text, View } from 'react-native';
+import { flowSteps, type FlowPhase, type FlowState } from '@/format';
 import type { RequestDetail } from '@/types';
 import { C, TurnChip, s } from './ui';
 
-/** 稟議の流れ「申請 → 承認 → 実行」。誰が動く段か・どこまで進んだかを詳細画面の上に出す (Web の FlowSteps と同じ) */
-export function FlowSteps({ d, meId }: { d: RequestDetail; meId: string }) {
+/**
+ * 稟議の流れ「申請 → 承認 → 実行」。誰が動く段か・どこまで進んだかを詳細画面の上に出す (Web の FlowSteps と同じ)。
+ * 段を押すと、その段の中身 (selected) に切り替える
+ */
+export function FlowSteps({ d, meId, selected, onSelect }: { d: RequestDetail; meId: string; selected: FlowPhase; onSelect: (phase: FlowPhase) => void }) {
   const mark: Record<FlowState, { bg: string; fg: string; text: string }> = {
     done: { bg: C.green, fg: '#fff', text: '✓' },
     current: { bg: C.attentionSubtle, fg: C.yellow, text: '●' },
@@ -16,13 +19,18 @@ export function FlowSteps({ d, meId }: { d: RequestDetail; meId: string }) {
       {flowSteps(d).map((st, i) => {
         const current = st.state === 'current';
         const mine = current && d.my_turn && st.people.some((p) => p.id === meId);
+        const on = st.phase === selected;
         const m = mark[st.state];
         return (
-          <View
-            key={st.title}
+          <Pressable
+            key={st.phase}
+            onPress={() => onSelect(st.phase)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
             accessibilityLabel={`${i + 1}. ${st.title} ${st.note}`}
             style={{
               flexDirection: 'row', gap: 10, padding: 10,
+              backgroundColor: on ? C.accentSubtle : 'transparent',
               borderTopWidth: i ? 1 : 0, borderTopColor: C.borderMuted,
               borderLeftWidth: 3, borderLeftColor: current ? C.attentionBorder : 'transparent',
             }}
@@ -38,7 +46,8 @@ export function FlowSteps({ d, meId }: { d: RequestDetail; meId: string }) {
               </View>
               <Text style={s.muted}>{st.people.map((p) => p.name).join('、') || '未指定'}</Text>
             </View>
-          </View>
+            {on && <Text style={{ color: C.accent, fontWeight: '700', alignSelf: 'center' }}>表示中</Text>}
+          </Pressable>
         );
       })}
     </View>

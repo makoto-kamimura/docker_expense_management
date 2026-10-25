@@ -125,7 +125,13 @@ export function describeEvent(e: Extract<TimelineEntry, { type: 'event' }>, kind
 /** 3段の流れ (申請 → 承認 → 実行) の各段の状態。stopped は却下・取り下げで止まった段 */
 export type FlowState = 'done' | 'current' | 'todo' | 'stopped';
 
+/** 3段の流れの段。詳細画面では段を押して、申請の内容・承認までのやり取り・マージ後のやり取りを切り替える */
+export type FlowPhase = 'request' | 'review' | 'act';
+
+export const FLOW_PHASES: FlowPhase[] = ['request', 'review', 'act'];
+
 export interface FlowStep {
+  phase: FlowPhase;
   title: string;
   /** その段で動く人 */
   people: UserRef[];
@@ -160,8 +166,9 @@ export function flowSteps(d: Pick<RequestDetail, 'request' | 'requester' | 'assi
     approved: '承認済み・マージ待ち',
   };
   return [
-    { title: '申請', people: [d.requester], note: requestNote[r.status] ?? '申請済み', state: states[0] },
+    { phase: 'request', title: '申請', people: [d.requester], note: requestNote[r.status] ?? '申請済み', state: states[0] },
     {
+      phase: 'review',
       title: '承認',
       people: d.reviewers,
       note: states[1] === 'stopped'
@@ -170,12 +177,60 @@ export function flowSteps(d: Pick<RequestDetail, 'request' | 'requester' | 'assi
       state: states[1],
     },
     {
+      phase: 'act',
       title: '実行',
       people: [actorOf(d)],
       note: states[2] === 'done' ? t.done : states[2] === 'stopped' ? '取り下げ' : `${d.assignee ? '担当者が' : '申請者が'}${t.actVerb}`,
       state: states[2],
     },
   ];
+}
+
+/**
+ * 詳細画面を開いたときに出す段 (今の段か、止まった段)。
+ * 再確認の依頼中は、理由のコメントと編集・再申請の操作がある承認を開く。完了は実行。
+ */
+export function currentPhase(r: Pick<RequestDetail['request'], 'status' | 'merged_at' | 'submitted_at'>): FlowPhase {
+  switch (r.status) {
+    case 'draft': return 'request';
+    case 'submitted':
+    case 'under_review':
+    case 'changes_needed':
+    case 'approved': return 'review';
+    case 'merged':
+    case 'purchased': return 'act';
+    case 'closed': return r.merged_at ? 'act' : r.submitted_at ? 'review' : 'request';
+  }
+}
+
+/**
+ * タイムラインを、マージまで (承認) とマージのあと (実行) に分ける。
+ * マージの操作は承認に入れ、その次から実行。再オープンでレビュー待ちに戻るので、再オープンの操作から承認に戻す
+ * (同じ時刻なら操作がコメントより先に並ぶので、マージ・再オープンと一緒に書いたコメントは次の段に入る)。
+ */
+export function splitTimeline(entries: TimelineEntry[]): Record<'review' | 'act', TimelineEntry[]> {
+  const out: Record<'review' | 'act', TimelineEntry[]> = { review: [], act: [] };
+  let phase: 'review' | 'act' = 'review';
+  for (const e of entries) {
+    if (e.type === 'event' && e.action === 'reopened') phase = 'review';
+    out[phase].push(e);
+    if (e.type === 'event' && e.action === 'merged') phase = 'act';
+  }
+  return out;
+}
+
+/**
+ * その段が始まっているか。承認は申請したら、実行はマージしたら始まる (流れの todo とは別。再確認の依頼中も承認は始まっている)。
+ * 再オープンでマージの記録が消えても、マージ後のやり取りが残っていれば実行は始まっている扱いにする
+ */
+export function phaseStarted(
+  r: Pick<RequestDetail['request'], 'submitted_at' | 'merged_at'>,
+  phase: FlowPhase,
+  timeline: Record<'review' | 'act', TimelineEntry[]>,
+): boolean {
+  if (phase === 'request') return true;
+  if (phase === 'review') return r.submitted_at != null;
+  return r.merged_at != null || timeline.act.length > 0;
 }
 
 export interface Checkpoint {
