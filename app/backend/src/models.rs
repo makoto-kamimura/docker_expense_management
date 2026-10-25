@@ -484,11 +484,9 @@ pub struct ChoreStatus {
     /// 推奨頻度の今の期間 (今日 / 今週 / 今月) にコミットした日数と、クリアに必要な日数。頻度が未設定なら今日の分 (0 か 1 / 1)
     pub period_done: i64,
     pub period_target: i64,
-    /// プッシュ済みで、今日のコミットを取り消せない
-    pub locked: bool,
 }
 
-/// プッシュして取ったトロフィーの、種類 (scope) ごとの数
+/// 取ったトロフィー (自動でプッシュした記録) の、種類 (scope) ごとの数
 #[derive(Debug, Clone, Serialize)]
 pub struct TrophyCount {
     pub scope: &'static str,
@@ -512,16 +510,8 @@ pub struct PushStatus {
     /// 対象の家事の数と、そのうちクリアした数
     pub total: i64,
     pub done: i64,
-    pub can_push: bool,
-    /// 今の期間はプッシュ済み
+    /// 今の期間はプッシュ済み (すべてクリアして、トロフィーを取った)
     pub pushed: bool,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub struct PushInput {
-    /// 省略時は all (以前のアプリは本文 {} で送ってくる)
-    #[serde(default)]
-    pub scope: Option<String>,
 }
 
 /// 連続記録・累計日数で付くマーク
@@ -564,7 +554,7 @@ pub struct ContributionSummary {
     pub current_streak: i64,
     pub longest_streak: i64,
     pub committed_today: bool,
-    /// プッシュして取ったトロフィーの数 (すべての種類の合計。取り消せない実績)
+    /// 取ったトロフィーの数 (すべての種類の合計。過ぎた期間の分は消えない)
     pub trophies: i64,
     /// トロフィーの種類ごとの数 (すべて / 毎日 / 週 / 月 の順)
     pub trophy_counts: Vec<TrophyCount>,
@@ -586,8 +576,6 @@ pub struct MemberContribution {
 pub struct ChoresResp {
     pub today: NaiveDate,
     pub chores: Vec<ChoreStatus>,
-    /// 今日の家事 (非表示を除く) をすべてコミットしていて、まだプッシュしていない (pushes の all と同じ)
-    pub can_push: bool,
     /// 種類ごとのプッシュの状況 (すべて / 毎日 / 週 / 月 の順)
     pub pushes: Vec<PushStatus>,
     /// ログインユーザーの実績

@@ -16,7 +16,7 @@ use crate::{
     handlers::attachments::{resolve_content_type, serve_file, MAX_BYTES},
     models::{
         Badge, Chore, ChoreImage, ChoreImageUpdate, ChoreInput, ChoreOrder, ChoreStat, ChoreStatus, ChoresResp,
-        ContributionDay, ContributionSummary, MemberContribution, PushInput, PushStatus, TrophyCount, UserRef,
+        ContributionDay, ContributionSummary, MemberContribution, PushStatus, TrophyCount, UserRef,
     },
     state::AppState,
 };
@@ -149,7 +149,8 @@ fn badges(total_days: i64, longest: i64) -> Vec<Badge> {
 // プッシュの種類 (すべて / 毎日 / 週 / 月)
 // ---------------------------------------------------------------------------
 
-/// プッシュの種類。all は今日すべての家事、それ以外は推奨頻度の期間が同じ家事が対象
+/// プッシュ (トロフィー) の種類。all は今日すべての家事、それ以外は推奨頻度の期間が同じ家事が対象。
+/// 対象の家事をすべてクリアすると、自動でプッシュしてトロフィーを取る
 pub struct PushScope {
     pub key: &'static str,
     /// タブの名前
@@ -158,20 +159,14 @@ pub struct PushScope {
     pub period: &'static str,
     pub trophy_icon: &'static str,
     pub trophy_label: &'static str,
-    /// プッシュできないときの案内
-    pub hint: &'static str,
 }
 
 pub const PUSH_SCOPES: &[PushScope] = &[
-    PushScope { key: "all", label: "すべて", period: "今日", trophy_icon: "🏆", trophy_label: "すべてクリア", hint: "今日の家事をすべてコミットするとプッシュできます" },
-    PushScope { key: "day", label: "毎日", period: "今日", trophy_icon: "🥉", trophy_label: "毎日クリア", hint: "毎日の家事を今日すべてコミットするとプッシュできます" },
-    PushScope { key: "week", label: "週", period: "今週", trophy_icon: "🥈", trophy_label: "週クリア", hint: "週の家事を今週それぞれの回数ぶんコミットするとプッシュできます" },
-    PushScope { key: "month", label: "月", period: "今月", trophy_icon: "🥇", trophy_label: "月クリア", hint: "月の家事を今月それぞれの回数ぶんコミットするとプッシュできます" },
+    PushScope { key: "all", label: "すべて", period: "今日", trophy_icon: "🏆", trophy_label: "すべてクリア" },
+    PushScope { key: "day", label: "毎日", period: "今日", trophy_icon: "🥉", trophy_label: "毎日クリア" },
+    PushScope { key: "week", label: "週", period: "今週", trophy_icon: "🥈", trophy_label: "週クリア" },
+    PushScope { key: "month", label: "月", period: "今月", trophy_icon: "🥇", trophy_label: "月クリア" },
 ];
-
-fn push_scope(key: &str) -> Option<&'static PushScope> {
-    PUSH_SCOPES.iter().find(|s| s.key == key)
-}
 
 /// 期間の初日 (週は草グラフと同じ日曜始まり)
 pub fn period_start(scope: &str, today: NaiveDate) -> NaiveDate {
@@ -246,7 +241,6 @@ fn push_statuses(chores: &[&Chore], commits: &[(Uuid, NaiveDate)], pushes: &[Pus
                 trophy_label: s.trophy_label,
                 total,
                 done,
-                can_push: total > 0 && done == total && !pushed,
                 pushed,
             }
         })
@@ -413,7 +407,6 @@ async fn build_resp(state: &AppState, family_id: Uuid, me: Uuid) -> ApiResult<Ch
     let my_commits = commits_of(&rows, me);
     let my_pushes = pushes_of(&pushes, me);
     let mine = summarize(me, &my_commits, &my_pushes, &chores, today);
-    let pushed_all = has_pushed(&my_pushes, "all", today);
     let chore_list: Vec<ChoreStatus> = chores
         .iter()
         .map(|c| {
@@ -422,8 +415,6 @@ async fn build_resp(state: &AppState, family_id: Uuid, me: Uuid) -> ApiResult<Ch
             // 頻度が未設定の家事は今日の分だけで数える
             let own = c.frequency_period.as_deref().unwrap_or("day");
             let (period_done, period_target) = progress(c, own, &my_commits, today);
-            let locked = committed_today
-                && (pushed_all || c.frequency_period.as_deref().is_some_and(|p| has_pushed(&my_pushes, p, today)));
             ChoreStatus {
                 chore: c.clone(),
                 committed_today,
@@ -431,7 +422,6 @@ async fn build_resp(state: &AppState, family_id: Uuid, me: Uuid) -> ApiResult<Ch
                 current_streak: stat.map_or(0, |s| s.current_streak),
                 period_done,
                 period_target,
-                locked,
                 images: images.iter().filter(|i| i.chore_id == c.id).cloned().collect(),
             }
         })
@@ -445,8 +435,7 @@ async fn build_resp(state: &AppState, family_id: Uuid, me: Uuid) -> ApiResult<Ch
         .collect();
     let active: Vec<&Chore> = chores.iter().filter(|c| !c.archived).collect();
     let push_list = push_statuses(&active, &my_commits, &my_pushes, today);
-    let can_push = push_list.iter().any(|p| p.scope == "all" && p.can_push);
-    Ok(ChoresResp { today, chores: chore_list, can_push, pushes: push_list, me: mine, members })
+    Ok(ChoresResp { today, chores: chore_list, pushes: push_list, me: mine, members })
 }
 
 /// 同じ家族の家事を取得する。他の家族の家事は存在しない扱い。
@@ -517,6 +506,11 @@ fn validate(input: &ChoreInput) -> ApiResult<ChoreFields> {
 // ---------------------------------------------------------------------------
 
 pub async fn list(State(state): State<AppState>, AuthUser(me): AuthUser) -> ApiResult<Json<ChoresResp>> {
+    // 開いたときにも、クリアしていればトロフィーを取る (管理者が家事を非表示にしてクリアになったときなど)
+    let today = today(&state.db).await?;
+    let mut conn = state.db.acquire().await?;
+    award_trophies(&mut conn, me.family_id, me.id, today).await?;
+    drop(conn);
     Ok(Json(build_resp(&state, me.family_id, me.id).await?))
 }
 
@@ -615,6 +609,7 @@ pub async fn reorder(
 }
 
 /// 今日の分をコミットする。1 日 1 回なので、2 回目は何もしない。
+/// コミットで種類 (すべて / 毎日 / 週 / 月) の家事をすべてクリアしたら、自動でプッシュしてトロフィーを取る
 pub async fn commit(
     State(state): State<AppState>,
     AuthUser(me): AuthUser,
@@ -624,92 +619,87 @@ pub async fn commit(
     if chore.archived {
         return Err(ApiError::Conflict("非表示の家事にはコミットできません".into()));
     }
-    sqlx::query(&format!(
-        "INSERT INTO chore_commits (chore_id, user_id, committed_on) VALUES ($1, $2, {TODAY_SQL})
-         ON CONFLICT DO NOTHING"
-    ))
-    .bind(id)
-    .bind(me.id)
-    .execute(&state.db)
-    .await?;
+    let today = today(&state.db).await?;
+    let mut tx = state.db.begin().await?;
+    sqlx::query("INSERT INTO chore_commits (chore_id, user_id, committed_on) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING")
+        .bind(id)
+        .bind(me.id)
+        .bind(today)
+        .execute(&mut *tx)
+        .await?;
+    award_trophies(&mut tx, me.family_id, me.id, today).await?;
+    tx.commit().await?;
     Ok(Json(build_resp(&state, me.family_id, me.id).await?))
 }
 
-/// 今日のコミットを取り消す (押し間違い用。過去の日の分は取り消せない)
+/// 今日のコミットを取り消す (押し間違い用。過去の日の分は取り消せない)。
+/// 取り消してクリアでなくなった種類は、今の期間のトロフィーも取り消す (もう一度クリアすればまた取れる)
 pub async fn uncommit(
     State(state): State<AppState>,
     AuthUser(me): AuthUser,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<ChoresResp>> {
-    let chore = load_chore(&state, me.family_id, id).await?;
+    load_chore(&state, me.family_id, id).await?;
     let today = today(&state.db).await?;
-    // 「すべて」を今日プッシュしたか、この家事の頻度の種類を今の期間にプッシュしていたら、
-    // 今日のコミットは確定済みなので取り消せない (同じ文で判定して、プッシュとの競合を防ぐ)
-    let scope = chore.frequency_period.as_deref();
-    let start = period_start(scope.unwrap_or("all"), today);
-    let deleted = sqlx::query(
-        "DELETE FROM chore_commits WHERE chore_id = $1 AND user_id = $2 AND committed_on = $3
-            AND NOT EXISTS (SELECT 1 FROM chore_pushes WHERE user_id = $2
-                  AND ((scope = 'all' AND period_start = $3) OR (scope = $4 AND period_start = $5)))",
-    )
-    .bind(id)
-    .bind(me.id)
-    .bind(today)
-    .bind(scope)
-    .bind(start)
-    .execute(&state.db)
-    .await?;
-    if deleted.rows_affected() == 0 {
-        let pushes = family_pushes(&state.db, me.family_id, Some(me.id)).await?;
-        if has_pushed(&pushes, "all", today) || scope.is_some_and(|p| has_pushed(&pushes, p, today)) {
-            return Err(ApiError::Conflict("プッシュ済みなので、今日のコミットは取り消せません".into()));
-        }
-    }
+    let mut tx = state.db.begin().await?;
+    sqlx::query("DELETE FROM chore_commits WHERE chore_id = $1 AND user_id = $2 AND committed_on = $3")
+        .bind(id)
+        .bind(me.id)
+        .bind(today)
+        .execute(&mut *tx)
+        .await?;
+    revoke_trophies(&mut tx, me.family_id, me.id, today).await?;
+    tx.commit().await?;
     Ok(Json(build_resp(&state, me.family_id, me.id).await?))
 }
 
-/// 種類 (すべて / 毎日 / 週 / 月) ごとに、対象の家事 (非表示を除く) をすべてクリアしていたら、
-/// プッシュしてその種類のトロフィーを取る。all と day は今日 1 回、week は今週 1 回、month は今月 1 回。
-/// プッシュは取り消せない実績として残り、対象の家事の今日のコミットも取り消せなくなる。
-pub async fn push(
-    State(state): State<AppState>,
-    AuthUser(me): AuthUser,
-    input: Option<Json<PushInput>>,
-) -> ApiResult<Json<ChoresResp>> {
-    let key = input.and_then(|Json(i)| i.scope).unwrap_or_else(|| "all".into());
-    let scope = push_scope(&key).ok_or_else(|| ApiError::BadRequest("プッシュの種類が正しくありません".into()))?;
-    let today = today(&state.db).await?;
-    let start = period_start(scope.key, today);
-    // 「クリアしていない家事がない」ことの確認と記録を 1 文で行う。
-    // クリア = 期間の初日から今日までに、推奨の回数 (all / day は 1 回。期間の日数が上限) の日数コミットした
-    let inserted = sqlx::query(
-        "INSERT INTO chore_pushes (family_id, user_id, scope, pushed_on, period_start, chore_count)
-         SELECT $1, $2, $3, $4, $5, COUNT(*) FROM chores c
-          WHERE c.family_id = $1 AND NOT c.archived AND ($3 = 'all' OR c.frequency_period = $3)
-         HAVING COUNT(*) > 0
-            AND bool_and((SELECT COUNT(*) FROM chore_commits cc
-                           WHERE cc.chore_id = c.id AND cc.user_id = $2 AND cc.committed_on BETWEEN $5 AND $4)
-                         >= LEAST(GREATEST(COALESCE(c.frequency_times, 1), 1), $6))
-         ON CONFLICT (user_id, scope, period_start) DO NOTHING",
-    )
-    .bind(me.family_id)
-    .bind(me.id)
-    .bind(scope.key)
-    .bind(today)
-    .bind(start)
-    .bind(target_cap(scope.key, today))
-    .execute(&state.db)
-    .await?;
-    if inserted.rows_affected() == 0 {
-        let resp = build_resp(&state, me.family_id, me.id).await?;
-        let pushed = resp.pushes.iter().any(|p| p.scope == scope.key && p.pushed);
-        return Err(ApiError::Conflict(if pushed {
-            format!("{}の「{}」はもうプッシュしています", scope.period, scope.label)
-        } else {
-            scope.hint.into()
-        }));
+/// 種類 ($3) の対象の家事 (非表示を除く) を、期間の初日 ($5) から今日 ($4) までにすべてクリアしていれば 1 行になる FROM 句。
+/// クリア = 推奨の回数 (all / day は 1 回。期間の日数 $6 が上限) の日数コミットした。$1 = 家族、$2 = ユーザー
+const CLEARED_SQL: &str = "FROM chores c
+  WHERE c.family_id = $1 AND NOT c.archived AND ($3 = 'all' OR c.frequency_period = $3)
+ HAVING COUNT(*) > 0
+    AND bool_and((SELECT COUNT(*) FROM chore_commits cc
+                   WHERE cc.chore_id = c.id AND cc.user_id = $2 AND cc.committed_on BETWEEN $5 AND $4)
+                 >= LEAST(GREATEST(COALESCE(c.frequency_times, 1), 1), $6))";
+
+/// 種類ごとに、今の期間の対象の家事をすべてクリアしていたらプッシュしてトロフィーを取る。
+/// all と day は今日 1 回、week は今週 1 回、month は今月 1 回 (取った日は最初にクリアした日のまま)
+async fn award_trophies(conn: &mut PgConnection, family_id: Uuid, user_id: Uuid, today: NaiveDate) -> ApiResult<()> {
+    for s in PUSH_SCOPES {
+        sqlx::query(&format!(
+            "INSERT INTO chore_pushes (family_id, user_id, scope, pushed_on, period_start, chore_count)
+             SELECT $1, $2, $3, $4, $5, COUNT(*) {CLEARED_SQL}
+             ON CONFLICT (user_id, scope, period_start) DO NOTHING"
+        ))
+        .bind(family_id)
+        .bind(user_id)
+        .bind(s.key)
+        .bind(today)
+        .bind(period_start(s.key, today))
+        .bind(target_cap(s.key, today))
+        .execute(&mut *conn)
+        .await?;
     }
-    Ok(Json(build_resp(&state, me.family_id, me.id).await?))
+    Ok(())
+}
+
+/// 種類ごとに、今の期間のトロフィーのうち、もうクリアしていないものを取り消す。過ぎた期間のトロフィーは消さない
+async fn revoke_trophies(conn: &mut PgConnection, family_id: Uuid, user_id: Uuid, today: NaiveDate) -> ApiResult<()> {
+    for s in PUSH_SCOPES {
+        sqlx::query(&format!(
+            "DELETE FROM chore_pushes WHERE family_id = $1 AND user_id = $2 AND scope = $3 AND period_start = $5
+                AND NOT EXISTS (SELECT 1 {CLEARED_SQL})"
+        ))
+        .bind(family_id)
+        .bind(user_id)
+        .bind(s.key)
+        .bind(today)
+        .bind(period_start(s.key, today))
+        .bind(target_cap(s.key, today))
+        .execute(&mut *conn)
+        .await?;
+    }
+    Ok(())
 }
 
 /// 家族メンバー 1 人の実績
@@ -924,7 +914,7 @@ mod tests {
         let status = |commits: &[(Uuid, NaiveDate)], pushes: &[PushRow]| {
             push_statuses(&chores, commits, pushes, today)
                 .into_iter()
-                .map(|p| (p.scope, p.done, p.total, p.can_push, p.pushed))
+                .map(|p| (p.scope, p.done, p.total, p.pushed))
                 .collect::<Vec<_>>()
         };
 
@@ -938,30 +928,30 @@ mod tests {
         assert_eq!(
             status(&commits, &[]),
             vec![
-                ("all", 1, 4, false, false),
-                ("day", 1, 1, true, false),
-                ("week", 0, 1, false, false),
-                ("month", 1, 1, true, false),
+                ("all", 1, 4, false),
+                ("day", 1, 1, false),
+                ("week", 0, 1, false),
+                ("month", 1, 1, false),
             ]
         );
         assert_eq!(progress(&weekly, "week", &commits, today), (1, 2));
 
-        // 週 2 回目をやるとクリア。毎日はプッシュ済みなのでもう押せない
+        // 週 2 回目をやるとクリア。毎日と月はプッシュ済み (トロフィーを取った)
         let mut commits = commits;
         commits.push((weekly.id, today));
         let pushes = vec![push_row("day", "2026-09-24"), push_row("month", "2026-09-05")];
         let got = status(&commits, &pushes);
-        assert_eq!(got[1], ("day", 1, 1, false, true));
-        assert_eq!(got[2], ("week", 1, 1, true, false));
-        assert_eq!(got[3], ("month", 1, 1, false, true));
+        assert_eq!(got[1], ("day", 1, 1, true));
+        assert_eq!(got[2], ("week", 1, 1, false));
+        assert_eq!(got[3], ("month", 1, 1, true));
     }
 
     #[test]
-    fn scope_without_chores_cannot_be_pushed() {
+    fn scope_without_chores_has_nothing_to_clear() {
         let only_daily = chore(1, Some("day"), Some(1));
         let got = push_statuses(&[&only_daily], &[(only_daily.id, d("2026-09-24"))], &[], d("2026-09-24"));
         let week = got.iter().find(|p| p.scope == "week").unwrap();
-        assert_eq!((week.total, week.can_push), (0, false));
+        assert_eq!((week.total, week.done, week.pushed), (0, 0, false));
     }
 
     #[test]

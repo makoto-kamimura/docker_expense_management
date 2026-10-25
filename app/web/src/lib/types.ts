@@ -687,13 +687,11 @@ export interface ChoreStatus extends Chore {
   /** 推奨頻度の今の期間 (今日 / 今週 / 今月) にコミットした日数と、クリアに必要な日数。頻度が未設定なら今日の分 */
   period_done: number;
   period_target: number;
-  /** プッシュ済みで、今日のコミットを取り消せない */
-  locked: boolean;
   /** 見本画像 (並び順) */
   images: ChoreImage[];
 }
 
-/** プッシュの種類。all = 今日すべての家事、それ以外は推奨頻度の期間が同じ家事 */
+/** プッシュ (トロフィー) の種類。all = 今日すべての家事、それ以外は推奨頻度の期間が同じ家事。すべてクリアすると自動でプッシュする */
 export type PushScope = 'all' | FrequencyPeriod;
 
 /** トロフィーの種類ごとの数 */
@@ -717,8 +715,7 @@ export interface PushStatus {
   /** 対象の家事の数と、そのうちクリアした数 */
   total: number;
   done: number;
-  can_push: boolean;
-  /** 今の期間はプッシュ済み */
+  /** 今の期間はプッシュ済み (すべてクリアして、トロフィーを取った) */
   pushed: boolean;
 }
 
@@ -756,7 +753,7 @@ export interface ContributionSummary {
   current_streak: number;
   longest_streak: number;
   committed_today: boolean;
-  /** プッシュして取ったトロフィーの数 (すべての種類の合計。取り消せない実績) */
+  /** 取ったトロフィーの数 (すべての種類の合計。過ぎた期間の分は消えない) */
   trophies: number;
   /** トロフィーの種類ごとの数 (すべて / 毎日 / 週 / 月 の順) */
   trophy_counts: TrophyCount[];
@@ -771,8 +768,6 @@ export interface ContributionSummary {
 export interface ChoresResp {
   today: string;
   chores: ChoreStatus[];
-  /** 今日の家事 (非表示を除く) をすべてコミットしていて、まだプッシュしていない (pushes の all と同じ) */
-  can_push: boolean;
   /** 種類ごとのプッシュの状況 (すべて / 毎日 / 週 / 月 の順) */
   pushes: PushStatus[];
   me: ContributionSummary;

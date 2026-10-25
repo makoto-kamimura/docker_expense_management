@@ -7,7 +7,6 @@ import Avatar from '@/components/Avatar';
 import ChoreBadges from '@/components/ChoreBadges';
 import ContributionGraph from '@/components/ContributionGraph';
 import ChoreButton from './chore-button';
-import PushButton from './push-button';
 
 /** 家事のコミット。やった家事を記録し、連続記録・マークを付ける */
 export default async function ChoresPage({ searchParams }: { searchParams: { period?: string } }) {
@@ -15,7 +14,7 @@ export default async function ChoresPage({ searchParams }: { searchParams: { per
   const d = await apiFetch<ChoresResp>('/chores');
   const active = d.chores.filter((c) => !c.archived);
   const doneToday = active.filter((c) => c.committed_today).length;
-  // 推奨頻度 (毎日 / 週 / 月) で表示を切り替える。タブごとに、その家事をすべてクリアするとプッシュできる
+  // 推奨頻度 (毎日 / 週 / 月) で表示を切り替える。タブごとに、その家事をすべてクリアすると自動でプッシュしてトロフィーを取る
   const period = isChorePeriodTab(searchParams.period) ? searchParams.period : 'all';
   const shown = filterByPeriod(active, period);
   const push = d.pushes.find((p) => p.scope === period);
@@ -66,19 +65,18 @@ export default async function ChoresPage({ searchParams }: { searchParams: { per
               )}
             </>
           )}
-          {/* 表示中のタブの家事をすべてクリアしたときだけプッシュボタンを出す */}
-          {push && push.total > 0 && !push.can_push && !push.pushed && (
+          {/* 表示中のタブのクリアの進み具合。すべてクリアすると自動でプッシュし、トロフィーを出す */}
+          {push && push.total > 0 && !push.pushed && (
             <p className="muted small" style={{ margin: '12px 0 0' }}>
               {push.trophy_icon} {push.period}のクリア: <strong>{push.done} / {push.total}</strong>件
               {push.scope === 'week' || push.scope === 'month' ? ' (推奨の回数ぶんコミットするとクリア)' : ''}
             </p>
           )}
-          {push?.can_push && <PushButton status={push} />}
           {push?.pushed && (
             <div className="push-panel pushed" role="status">
               <span className="push-trophy" aria-hidden="true">{push.trophy_icon}</span>
               <div>
-                <strong>{push.period}の「{push.label}」はプッシュ済みです。「{push.trophy_label}」トロフィーを獲得しました！</strong>
+                <strong>{push.period}の「{push.label}」をすべてクリアしました。「{push.trophy_label}」トロフィーを獲得しました！</strong>
                 <div className="muted small">
                   これまでのトロフィー: {d.me.trophy_counts.find((t) => t.scope === push.scope)?.count ?? 0}個 (全種類で{d.me.trophies}個)
                 </div>
@@ -86,8 +84,8 @@ export default async function ChoresPage({ searchParams }: { searchParams: { per
             </div>
           )}
           <p className="muted small" style={{ margin: '12px 0 0' }}>
-            1つの家事は1日1回コミットできます (プッシュするまでは、その日のうちなら取り消せます)。タブごとに家事をすべてクリアするとプッシュでき、トロフィーが残ります
-            (すべて 🏆 = 今日すべて、毎日 🥉 = 毎日の家事を今日、週 🥈 = 週の家事を今週、月 🥇 = 月の家事を今月、それぞれ推奨の回数ぶん)。家事の名前を押すと、きれいな状態の見本を確認できます。稟議のレビューでは、申請者の家事の実績がレビュアーに表示されます。
+            1つの家事は1日1回コミットできます (その日のうちなら取り消せます)。タブごとに家事をすべてクリアすると自動でプッシュされ、トロフィーが残ります
+            (すべて 🏆 = 今日すべて、毎日 🥉 = 毎日の家事を今日、週 🥈 = 週の家事を今週、月 🥇 = 月の家事を今月、それぞれ推奨の回数ぶん)。コミットを取り消してクリアでなくなると、その期間のトロフィーも戻ります。家事の名前を押すと、きれいな状態の見本を確認できます。稟議のレビューでは、申請者の家事の実績がレビュアーに表示されます。
           </p>
         </div>
       </div>

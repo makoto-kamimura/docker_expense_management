@@ -8,7 +8,7 @@ export default function ChoreBadges({ c, compact, numbers = true }: { c: Contrib
   return (
     <div className="chore-summary">
       {numbers && <div className="chore-numbers">
-        <span title="プッシュして取ったトロフィー (取り消せない実績)">
+        <span title="家事をすべてクリアして取ったトロフィー (過ぎた期間の分は消えない実績)">
           トロフィー <strong className={c.trophies > 0 ? 'trophy-on' : undefined}>{c.trophies}</strong>個
           {c.trophy_counts.length > 0 && (
             <span className="muted">

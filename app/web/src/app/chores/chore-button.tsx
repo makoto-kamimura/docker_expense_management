@@ -48,12 +48,8 @@ export default function ChoreButton({ chore, linked = false }: { chore: ChoreSta
       {chore.committed_today ? (
         <div className="chore-done">
           <span className="chore-check">✓ コミット済み</span>
-          {/* プッシュした日のコミットは確定済みなので取り消せない */}
-          {chore.locked ? (
-            <span className="muted small">🏆 プッシュ済み</span>
-          ) : (
-            <button type="button" className="btn-link small" disabled={pending} onClick={() => toggle(false)}>取り消す</button>
-          )}
+          {/* その日のうちなら取り消せる (クリアでなくなると、その期間のトロフィーも戻る) */}
+          <button type="button" className="btn-link small" disabled={pending} onClick={() => toggle(false)}>取り消す</button>
         </div>
       ) : (
         <button type="button" className="btn-primary" disabled={pending} onClick={() => toggle(true)}>
