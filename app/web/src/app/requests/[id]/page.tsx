@@ -283,7 +283,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
           </div>
           <div className="side-section">
             <h3>種類</h3>
-            <Link href={r.type_id ? `/requests?filter=all&type=${r.type_id}` : '/requests?filter=all'} className="label label-outing">{type.icon} {type.name}</Link>
+            <Link href={r.type_id ? `/requests?turn=all&type=${r.type_id}` : '/requests?turn=all'} className="label label-outing">{type.icon} {type.name}</Link>
           </div>
           <div className="side-section">
             <h3 className="side-head">
@@ -293,7 +293,7 @@ export default async function RequestDetailPage({ params, searchParams }: { para
               )}
             </h3>
             <div className="label-list">
-              {d.labels.map((l) => <LabelChip key={l.id} label={l} href={`/requests?filter=all&label=${l.id}`} />)}
+              {d.labels.map((l) => <LabelChip key={l.id} label={l} href={`/requests?turn=all&label=${l.id}`} />)}
               {d.labels.length === 0 && <span className="muted">なし</span>}
             </div>
           </div>

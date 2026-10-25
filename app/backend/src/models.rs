@@ -484,11 +484,9 @@ pub struct ChoreStatus {
     /// 推奨頻度の今の期間 (今日 / 今週 / 今月) にコミットした日数と、クリアに必要な日数。頻度が未設定なら今日の分 (0 か 1 / 1)
     pub period_done: i64,
     pub period_target: i64,
-    /// プッシュ済みで、今日のコミットを取り消せない
-    pub locked: bool,
 }
 
-/// プッシュして取ったトロフィーの、種類 (scope) ごとの数
+/// 取ったトロフィー (自動でプッシュした記録) の、種類 (scope) ごとの数
 #[derive(Debug, Clone, Serialize)]
 pub struct TrophyCount {
     pub scope: &'static str,
@@ -512,16 +510,8 @@ pub struct PushStatus {
     /// 対象の家事の数と、そのうちクリアした数
     pub total: i64,
     pub done: i64,
-    pub can_push: bool,
-    /// 今の期間はプッシュ済み
+    /// 今の期間はプッシュ済み (すべてクリアして、トロフィーを取った)
     pub pushed: bool,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub struct PushInput {
-    /// 省略時は all (以前のアプリは本文 {} で送ってくる)
-    #[serde(default)]
-    pub scope: Option<String>,
 }
 
 /// 連続記録・累計日数で付くマーク
@@ -564,7 +554,7 @@ pub struct ContributionSummary {
     pub current_streak: i64,
     pub longest_streak: i64,
     pub committed_today: bool,
-    /// プッシュして取ったトロフィーの数 (すべての種類の合計。取り消せない実績)
+    /// 取ったトロフィーの数 (すべての種類の合計。過ぎた期間の分は消えない)
     pub trophies: i64,
     /// トロフィーの種類ごとの数 (すべて / 毎日 / 週 / 月 の順)
     pub trophy_counts: Vec<TrophyCount>,
@@ -586,8 +576,6 @@ pub struct MemberContribution {
 pub struct ChoresResp {
     pub today: NaiveDate,
     pub chores: Vec<ChoreStatus>,
-    /// 今日の家事 (非表示を除く) をすべてコミットしていて、まだプッシュしていない (pushes の all と同じ)
-    pub can_push: bool,
     /// 種類ごとのプッシュの状況 (すべて / 毎日 / 週 / 月 の順)
     pub pushes: Vec<PushStatus>,
     /// ログインユーザーの実績
@@ -746,8 +734,10 @@ pub struct PurchaseInput {
 
 #[derive(Debug, Default, Deserialize)]
 pub struct ListQuery {
-    /// all / my_turn / their_turn / waiting / to_review / mine / approved / purchased / closed
+    /// 段: all / waiting / to_review / mine / approved / purchased / closed (以前の my_turn / their_turn は番として読む)
     pub filter: Option<String>,
+    /// 番: all / my_turn / their_turn (段と掛け合わせる)
+    pub turn: Option<String>,
     /// 型で絞り込む (省略時はすべて)
     pub kind: Option<RequestKind>,
     /// 種類で絞り込む
@@ -757,18 +747,31 @@ pub struct ListQuery {
     pub label: Option<Uuid>,
 }
 
-/// 一覧のフィルターごとの件数 (種類・ラベルの絞り込みは反映する)
-#[derive(Debug, Serialize, sqlx::FromRow)]
+/// 一覧のタブの件数。段のタブは選んでいる番を、番のタブは選んでいる段を反映する (どちらも種類・ラベルの絞り込みは反映する)
+#[derive(Debug, Serialize)]
 pub struct RequestCounts {
-    pub my_turn: i64,
-    pub their_turn: i64,
+    pub status: StatusCounts,
+    pub turn: TurnCounts,
+}
+
+/// 段ごとの件数。all は全段
+#[derive(Debug, Serialize)]
+pub struct StatusCounts {
+    pub all: i64,
     pub waiting: i64,
     pub to_review: i64,
     pub mine: i64,
     pub approved: i64,
     pub purchased: i64,
     pub closed: i64,
+}
+
+/// 番ごとの件数。all は番で絞り込まない件数
+#[derive(Debug, Serialize)]
+pub struct TurnCounts {
     pub all: i64,
+    pub my_turn: i64,
+    pub their_turn: i64,
 }
 
 /// ラベル別の支出。label が None なら「ラベルなし」

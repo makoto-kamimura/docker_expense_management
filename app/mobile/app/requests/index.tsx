@@ -1,18 +1,20 @@
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, Image, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Alert, Image, Pressable, RefreshControl, ScrollView, SectionList, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { apiFetch, clearToken, getToken, linkPreviewUrl } from '@/api';
 import { money, timeAgo } from '@/format';
 import { Button, C, s, StatusBadge, statusColor, toneColor } from '@/components/ui';
 import { NotificationButton } from '@/components/NotificationButton';
-import { DEFAULT_FILTER, FILTERS, FILTER_STEPS, FILTER_TOP, statusLabel, typeOf, type FilterKey, type LinkedRequest, type Me, type RequestCounts, type RequestListItem, type RequestType } from '@/types';
+import { DEFAULT_TURN, FILTER_STEPS, STATUS_FILTERS, TURN_FILTERS, statusLabel, typeOf, type LinkedRequest, type Me, type RequestCounts, type RequestListItem, type RequestType, type StatusFilterKey, type TurnKey, type FilterTone } from '@/types';
 import { useTheme } from '@/theme';
 
 /** トップ: 申請一覧 + フィルター (readme.md 8.6節) */
 export default function RequestsScreen() {
   useTheme();
   const [items, setItems] = useState<RequestListItem[]>([]);
-  const [filter, setFilter] = useState<FilterKey>(DEFAULT_FILTER);
+  // 段 (null = 全段) と番。開いたときは全段の自分の番
+  const [status, setStatus] = useState<StatusFilterKey | null>(null);
+  const [turn, setTurn] = useState<TurnKey>(DEFAULT_TURN);
   // 種類で絞り込む (種類の ID)
   const [kind, setKind] = useState<string | null>(null);
   const [types, setTypes] = useState<RequestType[]>([]);
@@ -26,7 +28,7 @@ export default function RequestsScreen() {
       return next;
     });
   const [me, setMe] = useState<Me | null>(null);
-  // タブの件数 (種類の絞り込みは反映する)
+  // タブの件数 (段のタブには番を、番の絞り込みには段を反映する。種類はどちらにも)
   const [counts, setCounts] = useState<RequestCounts | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [token, setTokenState] = useState<string | null>(null);
@@ -34,9 +36,10 @@ export default function RequestsScreen() {
   const load = useCallback(async () => {
     try {
       setRefreshing(true);
+      const q = `turn=${turn}${status ? `&filter=${status}` : ''}${kind ? `&type=${kind}` : ''}`;
       const [data, count, self, typeList] = await Promise.all([
-        apiFetch<RequestListItem[]>(`/requests?filter=${filter}${kind ? `&type=${kind}` : ''}`),
-        apiFetch<RequestCounts>(`/requests/counts${kind ? `?type=${kind}` : ''}`),
+        apiFetch<RequestListItem[]>(`/requests?${q}`),
+        apiFetch<RequestCounts>(`/requests/counts?${q}`),
         apiFetch<Me>('/me'),
         apiFetch<RequestType[]>('/request-types'),
       ]);
@@ -50,7 +53,7 @@ export default function RequestsScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [filter, kind]);
+  }, [status, turn, kind]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -59,21 +62,37 @@ export default function RequestsScreen() {
     router.replace('/');
   };
 
-  // 状態のタブ 1つ。状態ごとの色で、選んでいるタブはその色で塗り、ほかは色の点を付ける (「すべて」は色なし)
-  const filterChip = (key: FilterKey) => {
-    const f = FILTERS.find((x) => x.key === key)!;
-    const on = f.key === filter;
-    const label = counts ? `${f.label}（${counts[f.key]}）` : f.label;
-    const tone = f.tone ? toneColor(f.tone) : C.fg;
+  // 段のタブ・番の絞り込みのチップ 1つ。色で、選んでいるものはその色で塗り、ほかは色の点を付ける (「すべて」は色なし)
+  const chip = (key: string, label: string, toneKey: FilterTone | null, on: boolean, onPress: () => void) => {
+    const tone = toneKey ? toneColor(toneKey) : C.fg;
     return (
-      <Pressable key={f.key} onPress={() => setFilter(f.key)} style={[s.chip, on && { backgroundColor: tone, borderColor: tone }]}>
+      <Pressable key={key} onPress={onPress} style={[s.chip, on && { backgroundColor: tone, borderColor: tone }]}>
         <Text style={[s.chipText, on && { color: C.card, fontWeight: '600' }]}>
-          {f.tone && !on && <Text style={{ color: tone }}>● </Text>}
+          {toneKey && !on && <Text style={{ color: tone }}>● </Text>}
           {label}
         </Text>
       </Pressable>
     );
   };
+  // 段のタブ。選んでいるタブをもう一度押すと、段の絞り込みを外す (全段)
+  const statusChip = (key: StatusFilterKey) => {
+    const f = STATUS_FILTERS.find((x) => x.key === key)!;
+    const on = key === status;
+    const label = `${f.label}${counts ? `（${counts.status[key]}）` : ''}${on ? ' ×' : ''}`;
+    return chip(key, label, f.tone, on, () => setStatus(on ? null : key));
+  };
+  const turnChip = (key: TurnKey) => {
+    const f = TURN_FILTERS.find((x) => x.key === key)!;
+    const label = counts ? `${f.label}（${counts.turn[key]}）` : f.label;
+    return chip(key, label, f.tone, key === turn, () => setTurn(key));
+  };
+  // 自分の番とそれ以外が混ざるときは、自分の番を先にして見出しで分ける (それぞれの中の並びは API のまま)
+  const myTurn = items.filter((i) => i.my_turn);
+  const others = items.filter((i) => !i.my_turn);
+  const sections: { title: string | null; data: RequestListItem[] }[] =
+    items.length === 0 ? [] : myTurn.length > 0 && others.length > 0
+      ? [{ title: 'あなたの番', data: myTurn }, { title: 'そのほか', data: others }]
+      : [{ title: null, data: items }];
 
   return (
     <View style={s.screen}>
@@ -106,11 +125,10 @@ export default function RequestsScreen() {
         </View>
       </View>
       <View style={{ gap: 6, paddingBottom: 8 }}>
-        {/* 1段目: 状態 (件数つき。自分の番・相手の番・すべてのあとに、詳細と同じ3段の流れの枠で段ごとに並べる) / 2段目: 種類 */}
+        {/* 1段目: 段のタブ (件数つき。詳細と同じ3段の流れの枠で段ごとに並べる) / 2段目: 絞り込み (番と種類) */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 6, alignItems: 'center' }}>
-          {FILTER_TOP.map(filterChip)}
           {FILTER_STEPS.map((g, i) => {
-            const on = g.keys.includes(filter);
+            const on = status !== null && g.keys.includes(status);
             return (
               <View
                 key={g.title}
@@ -120,39 +138,57 @@ export default function RequestsScreen() {
                 }}
               >
                 <Text style={{ fontSize: 12, fontWeight: '700', color: C.fg }}>{i + 1}. {g.title}</Text>
-                {g.keys.map(filterChip)}
+                {g.keys.map(statusChip)}
               </View>
             );
           })}
         </ScrollView>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 6 }}>
-          {([null, ...types.filter((x) => !x.hidden || x.id === kind)] as (RequestType | null)[]).map((x) => {
-            const on = (x?.id ?? null) === kind;
-            return (
-              <Pressable key={x?.id ?? 'any'} onPress={() => setKind(x?.id ?? null)} style={[s.chip, on && s.chipOn]}>
-                <Text style={[s.chipText, on && s.chipTextOn]}>{x ? `${x.icon} ${x.name}` : 'すべての種類'}</Text>
-              </Pressable>
-            );
-          })}
+        {/* 絞り込み: 番と種類を1つの枠に並べる。段のタブと掛け合わせる */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 4, paddingLeft: 8, borderColor: C.border, borderWidth: 1, borderRadius: 8, backgroundColor: C.bg }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.fg }}>絞り込み</Text>
+            {TURN_FILTERS.map((f) => turnChip(f.key))}
+            <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: C.border, marginHorizontal: 2 }} />
+            {([null, ...types.filter((x) => !x.hidden || x.id === kind)] as (RequestType | null)[]).map((x) => {
+              const on = (x?.id ?? null) === kind;
+              return (
+                <Pressable key={x?.id ?? 'any'} onPress={() => setKind(x?.id ?? null)} style={[s.chip, on && s.chipOn]}>
+                  <Text style={[s.chipText, on && s.chipTextOn]}>{x ? `${x.icon} ${x.name}` : 'すべての種類'}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </ScrollView>
       </View>
-      <FlatList
-        data={items}
+      <SectionList
+        sections={sections}
         keyExtractor={(i) => i.id}
+        stickySectionHeadersEnabled={false}
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}
         ListEmptyComponent={
           <View style={{ alignItems: 'center', marginTop: 40, gap: 8 }}>
             <Text style={s.muted}>該当する稟議はありません。</Text>
-            {filter !== 'all' && counts && counts.all > 0 && (
-              <Text style={s.link} onPress={() => setFilter('all')}>すべての稟議を見る（{counts.all}件）</Text>
+            {(status !== null || turn !== 'all') && (
+              <Text style={s.link} onPress={() => { setStatus(null); setTurn('all'); }}>すべての稟議を見る</Text>
             )}
           </View>
+        }
+        renderSectionHeader={({ section }) =>
+          section.title ? (
+            <Text style={{ fontSize: 12, fontWeight: '700', color: C.muted, marginTop: 4, marginBottom: 6 }}>
+              {section.title}（{section.data.length}件）
+            </Text>
+          ) : null
         }
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push(`/requests/${item.id}`)}
-            style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 6, padding: 12, marginBottom: 8, flexDirection: 'row', gap: 10 }}
+            style={{
+              backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 6, padding: 12, marginBottom: 8, flexDirection: 'row', gap: 10,
+              // 自分の番の行は、左の黄色の線と薄い黄色の背景で目立たせる (「あなたの番」の印と同じ色)
+              ...(item.my_turn && { backgroundColor: C.attentionSubtle, borderLeftWidth: 4, borderLeftColor: C.attentionBorder }),
+            }}
           >
             {item.preview_id && (
               <Image

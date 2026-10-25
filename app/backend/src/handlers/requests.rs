@@ -19,8 +19,8 @@ use crate::{
     models::{
         ActionInput, AssigneeInput, LinkPreview, RequestCategory, AlternativeInput, AlternativeProduct, Attachment, CommentInput,
         ListQuery, Member, PendingReply, Permissions, PurchaseInput, PurchaseRequest, ReplyAsk, RequestDetail, RequestInput,
-        RequestKind, RequestCounts, RequestListItem, RequestRef, RequestStatus, Reviewer, ReviewerDecision, TimelineEntry,
-        UserRef,
+        RequestKind, RequestCounts, RequestListItem, RequestRef, RequestStatus, Reviewer, ReviewerDecision, StatusCounts,
+        TimelineEntry, TurnCounts, UserRef,
     },
     state::AppState,
 };
@@ -404,16 +404,9 @@ pub async fn list(
           WHERE r.family_id = ",
     );
     push_scope(&mut b, &me, &q);
-    match q.filter.as_deref().unwrap_or("all") {
-        "all" => {}
-        key => match FILTERS.iter().find(|(k, _)| *k == key) {
-            Some((_, cond)) => {
-                b.push(" AND ");
-                push_filter(&mut b, &me, cond);
-            }
-            None => return Err(ApiError::BadRequest(format!("unknown filter: {key}"))),
-        },
-    }
+    let (status, turn) = conditions(&q)?;
+    b.push(" AND ");
+    push_all(&mut b, &me, &[status, turn]);
     // 進行中 → 承認済み → 完了 → クローズの順。同じ段階の中は自分の番を先に、更新が新しい順
     b.push(
         " ORDER BY CASE WHEN r.status IN ('approved', 'merged') THEN 1
@@ -467,10 +460,11 @@ const VIEWER_ROLE: &str = "(CASE WHEN r.requester_id = {me} THEN 'requester'
         WHEN EXISTS (SELECT 1 FROM request_reviewers rr WHERE rr.request_id = r.id AND rr.user_id = {me}) THEN 'reviewer'
         ELSE 'other' END)";
 
-/// 一覧のフィルター ("all" 以外) と、その条件。`{me}` はログインユーザーの ID に置き換える
-const FILTERS: [(&str, &str); 8] = [
-    ("my_turn", MY_TURN),
-    ("their_turn", THEIR_TURN),
+/// 一覧の番の絞り込み ("all" 以外) と、その条件。段と掛け合わせる
+const TURNS: [(&str, &str); 2] = [("my_turn", MY_TURN), ("their_turn", THEIR_TURN)];
+
+/// 一覧の段のタブ ("all" 以外) と、その条件。`{me}` はログインユーザーの ID に置き換える
+const STATUSES: [(&str, &str); 6] = [
     ("waiting", "r.status IN ('submitted', 'under_review')"),
     (
         "to_review",
@@ -483,11 +477,45 @@ const FILTERS: [(&str, &str); 8] = [
     ("closed", "r.status = 'closed'"),
 ];
 
+/// 一覧・件数の (段, 番) の条件。"all" と省略は絞り込まない。
+/// 以前の filter=my_turn / their_turn は番として読む (古いリンクのため)。知らないキーは 400
+fn conditions(q: &ListQuery) -> ApiResult<(Option<&'static str>, Option<&'static str>)> {
+    let find = |table: &[(&'static str, &'static str)], key: &str| table.iter().find(|(k, _)| *k == key).map(|(_, c)| *c);
+    let (mut status, mut turn) = (None, None);
+    match q.filter.as_deref() {
+        None | Some("all") => {}
+        Some(key) => match (find(&STATUSES, key), find(&TURNS, key)) {
+            (Some(cond), _) => status = Some(cond),
+            (None, Some(cond)) => turn = Some(cond),
+            (None, None) => return Err(ApiError::BadRequest(format!("unknown filter: {key}"))),
+        },
+    }
+    match q.turn.as_deref() {
+        None | Some("all") => {}
+        Some(key) => turn = Some(find(&TURNS, key).ok_or_else(|| ApiError::BadRequest(format!("unknown turn: {key}")))?),
+    }
+    Ok((status, turn))
+}
+
 fn push_filter(b: &mut sqlx::QueryBuilder<'_, sqlx::Postgres>, me: &Member, cond: &str) {
     let mut parts = cond.split("{me}");
     b.push(parts.next().unwrap_or_default());
     for part in parts {
         b.push_bind(me.id).push(part);
+    }
+}
+
+/// 条件をすべて AND でつなぐ (None は飛ばす。1つもなければ TRUE)
+fn push_all(b: &mut sqlx::QueryBuilder<'_, sqlx::Postgres>, me: &Member, conds: &[Option<&str>]) {
+    let mut any = false;
+    for cond in conds.iter().flatten() {
+        b.push(if any { " AND (" } else { "(" });
+        push_filter(b, me, cond);
+        b.push(")");
+        any = true;
+    }
+    if !any {
+        b.push("TRUE");
     }
 }
 
@@ -509,21 +537,34 @@ fn push_scope(b: &mut sqlx::QueryBuilder<'_, sqlx::Postgres>, me: &Member, q: &L
     }
 }
 
-/// フィルターごとの件数 (一覧のタブに出す)。filter は無視し、種類・ラベルの絞り込みは反映する
+/// 一覧のタブの件数。段のタブは選んでいる番 (turn) を、番のタブは選んでいる段 (filter) を反映する。
+/// 種類・ラベルの絞り込みはどちらにも反映する
 pub async fn counts(
     State(state): State<AppState>,
     AuthUser(me): AuthUser,
     Query(q): Query<ListQuery>,
 ) -> ApiResult<Json<RequestCounts>> {
-    let mut b = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT ");
-    for (key, cond) in FILTERS {
-        b.push("COUNT(*) FILTER (WHERE ");
-        push_filter(&mut b, &me, cond);
-        b.push(format!(") AS {key}, "));
+    let (status, turn) = conditions(&q)?;
+    let mut b = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT COUNT(*) FILTER (WHERE ");
+    push_all(&mut b, &me, &[turn]);
+    for (_, cond) in STATUSES {
+        b.push("), COUNT(*) FILTER (WHERE ");
+        push_all(&mut b, &me, &[Some(cond), turn]);
     }
-    b.push("COUNT(*) AS \"all\" FROM purchase_requests r WHERE r.family_id = ");
+    b.push("), COUNT(*) FILTER (WHERE ");
+    push_all(&mut b, &me, &[status]);
+    for (_, cond) in TURNS {
+        b.push("), COUNT(*) FILTER (WHERE ");
+        push_all(&mut b, &me, &[status, Some(cond)]);
+    }
+    b.push(") FROM purchase_requests r WHERE r.family_id = ");
     push_scope(&mut b, &me, &q);
-    Ok(Json(b.build_query_as().fetch_one(&state.db).await?))
+    let (all, waiting, to_review, mine, approved, purchased, closed, turn_all, my_turn, their_turn) =
+        b.build_query_as().fetch_one(&state.db).await?;
+    Ok(Json(RequestCounts {
+        status: StatusCounts { all, waiting, to_review, mine, approved, purchased, closed },
+        turn: TurnCounts { all: turn_all, my_turn, their_turn },
+    }))
 }
 
 /// ダッシュボード用: 自分の番 / 相手の番の件数 (絞り込みなし)
@@ -1630,5 +1671,30 @@ mod tests {
         assert_eq!(group_digits(999), "999");
         assert_eq!(group_digits(20_000), "20,000");
         assert_eq!(group_digits(1_234_567), "1,234,567");
+    }
+
+    fn query(filter: Option<&str>, turn: Option<&str>) -> ListQuery {
+        ListQuery { filter: filter.map(Into::into), turn: turn.map(Into::into), ..Default::default() }
+    }
+
+    #[test]
+    fn status_and_turn_are_combined() {
+        assert_eq!(conditions(&query(None, None)).unwrap(), (None, None));
+        assert_eq!(conditions(&query(Some("all"), Some("all"))).unwrap(), (None, None));
+        let (status, turn) = conditions(&query(Some("waiting"), Some("my_turn"))).unwrap();
+        assert_eq!((status, turn), (Some(STATUSES[0].1), Some(MY_TURN)));
+        assert_eq!(conditions(&query(Some("closed"), Some("their_turn"))).unwrap().1, Some(THEIR_TURN));
+    }
+
+    #[test]
+    fn old_turn_filters_still_work() {
+        assert_eq!(conditions(&query(Some("my_turn"), None)).unwrap(), (None, Some(MY_TURN)));
+        assert_eq!(conditions(&query(Some("their_turn"), None)).unwrap(), (None, Some(THEIR_TURN)));
+    }
+
+    #[test]
+    fn unknown_filter_or_turn_is_rejected() {
+        assert!(conditions(&query(Some("nope"), None)).is_err());
+        assert!(conditions(&query(None, Some("waiting"))).is_err());
     }
 }

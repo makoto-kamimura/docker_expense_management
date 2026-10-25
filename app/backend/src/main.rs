@@ -57,7 +57,6 @@ async fn main() -> anyhow::Result<()> {
         .route("/family/members/:user_id/contributions", get(handlers::chores::member_contributions))
         .route("/chores", get(handlers::chores::list).post(handlers::chores::create))
         .route("/chores/order", put(handlers::chores::reorder))
-        .route("/chores/push", post(handlers::chores::push))
         .route("/chores/:id", put(handlers::chores::update))
         .route(
             "/chores/:id/commit",

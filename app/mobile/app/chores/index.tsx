@@ -6,7 +6,7 @@ import { Avatar, Button, C, Card, s } from '@/components/ui';
 import { NotificationButton } from '@/components/NotificationButton';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
 import { CHORE_PERIOD_TABS, choreScheduleLabel, choreTimeTotalLabel, filterByPeriod, periodProgressLabel, type ChorePeriodTab } from '@/format';
-import type { ChoresResp, ChoreStatus, PushStatus } from '@/types';
+import type { ChoresResp, ChoreStatus } from '@/types';
 import { NEXT_THEME, THEME_LABEL, setThemeMode, useTheme } from '@/theme';
 
 type Filter = 'todo' | 'done' | 'all';
@@ -18,9 +18,6 @@ const FILTERS: { key: Filter; label: string }[] = [
 /** 家事がこの数より多いときだけ検索欄を出す */
 const SEARCH_FROM = 6;
 
-/** プッシュの対象の呼び方 (例: 今日の家事 / 週の家事) */
-const pushWhat = (p: PushStatus) => (p.scope === 'all' ? '今日の家事' : `${p.label}の家事`);
-
 /** 家事のコミット (Web の /chores と同じ内容。項目の管理は Web の設定画面で行う) */
 export default function ChoresScreen() {
   const { mode: theme } = useTheme();
@@ -29,7 +26,7 @@ export default function ChoresScreen() {
   const [token, setToken] = useState<string | null>(null);
   // 最初は「まだ」を表示して、自分がこれからコミットする家事を見つけやすくする
   const [filter, setFilter] = useState<Filter>('todo');
-  // 推奨頻度 (毎日 / 週 / 月) で表示を切り替える。タブごとに、その家事をすべてクリアするとプッシュできる
+  // 推奨頻度 (毎日 / 週 / 月) で表示を切り替える。タブごとに、その家事をすべてクリアすると自動でプッシュしてトロフィーを取る
   const [period, setPeriod] = useState<ChorePeriodTab>('all');
   const [query, setQuery] = useState('');
 
@@ -66,25 +63,6 @@ export default function ChoresScreen() {
     Alert.alert(`${c.name}のコミットを取り消しますか？`, undefined, [
       { text: 'キャンセル', style: 'cancel' },
       { text: '取り消す', style: 'destructive', onPress: () => toggle(c) },
-    ]);
-
-  /** 種類 (すべて / 毎日 / 週 / 月) の家事をすべてクリアしたらプッシュしてトロフィーを取る (取り消せない) */
-  const push = (p: PushStatus) =>
-    Alert.alert(`${pushWhat(p)}をプッシュしますか？`, `「${p.trophy_label}」トロフィー ${p.trophy_icon} を獲得し、消えない実績として残ります。プッシュした後は、対象の家事の今日のコミットを取り消せなくなります。`, [
-      { text: 'キャンセル', style: 'cancel' },
-      {
-        text: 'プッシュする',
-        onPress: async () => {
-          setBusy('push');
-          try {
-            setD(await apiFetch<ChoresResp>('/chores/push', { method: 'POST', body: JSON.stringify({ scope: p.scope }) }));
-          } catch (e) {
-            Alert.alert('プッシュできませんでした', (e as Error).message);
-          } finally {
-            setBusy(null);
-          }
-        },
-      },
     ]);
 
   return (
@@ -174,7 +152,6 @@ export default function ChoresScreen() {
                 c.current_streak > 0 ? `🔥${c.current_streak}日連続` : null,
                 `累計${c.days}日`,
               ].filter(Boolean).join(' · ');
-              const locked = c.locked;
               return (
                 <View
                   key={c.id}
@@ -208,10 +185,8 @@ export default function ChoresScreen() {
                       <Text style={[s.muted, { fontSize: 12 }]} numberOfLines={1}>{meta}</Text>
                     </View>
                   </Pressable>
-                  {/* プッシュした日のコミットは確定済みなので取り消せない */}
-                  {locked ? (
-                    <Text style={{ color: C.green, fontWeight: '600', fontSize: 13 }}>🏆 済み</Text>
-                  ) : busy === c.id ? (
+                  {/* その日のうちなら取り消せる (クリアでなくなると、その期間のトロフィーも戻る) */}
+                  {busy === c.id ? (
                     <ActivityIndicator style={{ width: 76 }} />
                   ) : c.committed_today ? (
                     <Pressable
@@ -240,25 +215,18 @@ export default function ChoresScreen() {
           </>
         )}
         {active.length === 0 && <Text style={s.muted}>家事の項目がありません。Web の設定画面で追加できます。</Text>}
-        {/* 表示中のタブの家事をすべてクリアしたときだけプッシュボタンを出す */}
-        {pushSt && pushSt.total > 0 && !pushSt.can_push && !pushSt.pushed && (
+        {/* 表示中のタブのクリアの進み具合。すべてクリアすると自動でプッシュし、トロフィーを出す */}
+        {pushSt && pushSt.total > 0 && !pushSt.pushed && (
           <Text style={[s.muted, { fontSize: 12, marginTop: 10 }]}>
             {pushSt.trophy_icon} {pushSt.period}のクリア: <Text style={{ fontWeight: '700', color: C.fg }}>{pushSt.done} / {pushSt.total}</Text>件
             {pushSt.scope === 'week' || pushSt.scope === 'month' ? ' (推奨の回数ぶんコミットするとクリア)' : ''}
           </Text>
         )}
-        {pushSt?.can_push && (
-          <View style={{ marginTop: 12, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: C.doneBorder, backgroundColor: C.doneSubtle, gap: 8 }}>
-            <Text style={{ fontWeight: '700', color: C.fg }}>{pushWhat(pushSt)}を{pushSt.total}件すべてクリアしました！</Text>
-            <Text style={[s.muted, { fontSize: 12 }]}>プッシュすると、{pushSt.period}の「{pushSt.trophy_label}」トロフィー {pushSt.trophy_icon} が実績として残ります。</Text>
-            <Button title="🚀 プッシュする" variant="merge" busy={busy === 'push'} onPress={() => push(pushSt)} />
-          </View>
-        )}
         {pushSt?.pushed && (
           <View style={{ marginTop: 12, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: C.attentionBorder, backgroundColor: C.attentionSubtle, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
             <Text style={{ fontSize: 30 }}>{pushSt.trophy_icon}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700', color: C.fg }}>{pushSt.period}の「{pushSt.label}」はプッシュ済みです。「{pushSt.trophy_label}」トロフィーを獲得しました！</Text>
+              <Text style={{ fontWeight: '700', color: C.fg }}>{pushSt.period}の「{pushSt.label}」をすべてクリアしました。「{pushSt.trophy_label}」トロフィーを獲得しました！</Text>
               <Text style={[s.muted, { fontSize: 12 }]}>
                 これまでのトロフィー: {d.me.trophy_counts.find((t) => t.scope === pushSt.scope)?.count ?? 0}個 (全種類で{d.me.trophies}個)
               </Text>
@@ -266,7 +234,7 @@ export default function ChoresScreen() {
           </View>
         )}
         <Text style={[s.muted, { fontSize: 12, marginTop: 10 }]}>
-          1つの家事は1日1回コミットできます。家事の名前を押すと、説明ときれいな状態の見本を確認できます。タブごとに家事をすべてクリアするとプッシュでき、トロフィーが残ります (すべて 🏆 = 今日すべて、毎日 🥉 = 毎日の家事を今日、週 🥈 = 週の家事を今週、月 🥇 = 月の家事を今月、それぞれ推奨の回数ぶん)。
+          1つの家事は1日1回コミットできます (その日のうちなら取り消せます)。家事の名前を押すと、説明ときれいな状態の見本を確認できます。タブごとに家事をすべてクリアすると自動でプッシュされ、トロフィーが残ります (すべて 🏆 = 今日すべて、毎日 🥉 = 毎日の家事を今日、週 🥈 = 週の家事を今週、月 🥇 = 月の家事を今月、それぞれ推奨の回数ぶん)。コミットを取り消してクリアでなくなると、その期間のトロフィーも戻ります。
         </Text>
       </Card>
 

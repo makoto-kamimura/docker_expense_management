@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { apiFetch, getApiBase } from './api';
 import { COOKIE_NAME, COOKIE_OPTIONS } from './auth-cookie';
-import type { Member, PushScope, RequestDetail } from './types';
+import type { Member, RequestDetail } from './types';
 
 type Result = { error?: string };
 
@@ -274,10 +274,11 @@ export async function updateMemberAction(userId: string, formData: FormData): Pr
 // Chores (家事のコミット)
 // ---------------------------------------------------------------------------
 
-/** 今日の分をコミットする / 取り消す */
+/** 今日の分をコミットする / 取り消す。クリアするとトロフィーを自動で取り、取り消してクリアでなくなると戻る */
 export async function toggleChoreCommitAction(choreId: string, commit: boolean): Promise<Result> {
   const r = await attempt(() => apiFetch(`/chores/${choreId}/commit`, { method: commit ? 'POST' : 'DELETE' }));
   revalidatePath('/chores', 'layout');
+  revalidatePath('/dashboard');
   return r;
 }
 
@@ -326,14 +327,6 @@ export async function updateChoreAction(
   const r = await attempt(() => apiFetch(`/chores/${choreId}`, { method: 'PUT', body: JSON.stringify(input) }));
   revalidatePath('/settings');
   revalidatePath('/chores', 'layout');
-  return r;
-}
-
-/** 種類 (すべて / 毎日 / 週 / 月) ごとに、対象の家事をすべてクリアしたらプッシュしてトロフィーを取る (取り消せない) */
-export async function pushChoresAction(scope: PushScope): Promise<Result> {
-  const r = await attempt(() => apiFetch('/chores/push', { method: 'POST', body: JSON.stringify({ scope }) }));
-  revalidatePath('/chores', 'layout');
-  revalidatePath('/dashboard');
   return r;
 }
 
