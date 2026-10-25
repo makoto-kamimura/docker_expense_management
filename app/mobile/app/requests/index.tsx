@@ -5,7 +5,7 @@ import { apiFetch, clearToken, getToken, linkPreviewUrl } from '@/api';
 import { money, timeAgo } from '@/format';
 import { Button, C, s, StatusBadge, statusColor, toneColor } from '@/components/ui';
 import { NotificationButton } from '@/components/NotificationButton';
-import { DEFAULT_FILTER, FILTERS, statusLabel, typeOf, type FilterKey, type LinkedRequest, type Me, type RequestCounts, type RequestListItem, type RequestType } from '@/types';
+import { DEFAULT_FILTER, FILTERS, FILTER_STEPS, FILTER_TOP, statusLabel, typeOf, type FilterKey, type LinkedRequest, type Me, type RequestCounts, type RequestListItem, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
 
 /** トップ: 申請一覧 + フィルター (readme.md 8.6節) */
@@ -59,6 +59,22 @@ export default function RequestsScreen() {
     router.replace('/');
   };
 
+  // 状態のタブ 1つ。状態ごとの色で、選んでいるタブはその色で塗り、ほかは色の点を付ける (「すべて」は色なし)
+  const filterChip = (key: FilterKey) => {
+    const f = FILTERS.find((x) => x.key === key)!;
+    const on = f.key === filter;
+    const label = counts ? `${f.label}（${counts[f.key]}）` : f.label;
+    const tone = f.tone ? toneColor(f.tone) : C.fg;
+    return (
+      <Pressable key={f.key} onPress={() => setFilter(f.key)} style={[s.chip, on && { backgroundColor: tone, borderColor: tone }]}>
+        <Text style={[s.chipText, on && { color: C.card, fontWeight: '600' }]}>
+          {f.tone && !on && <Text style={{ color: tone }}>● </Text>}
+          {label}
+        </Text>
+      </Pressable>
+    );
+  };
+
   return (
     <View style={s.screen}>
       <View style={{ padding: 12, gap: 8 }}>
@@ -90,20 +106,22 @@ export default function RequestsScreen() {
         </View>
       </View>
       <View style={{ gap: 6, paddingBottom: 8 }}>
-        {/* 1段目: 状態 (件数つき) / 2段目: 種類 */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 6 }}>
-          {FILTERS.map((f) => {
-            const on = f.key === filter;
-            const label = counts ? `${f.label}（${counts[f.key]}）` : f.label;
-            // 状態ごとの色。選んでいるタブはその色で塗り、ほかは色の点を付ける (「すべて」は色なし)
-            const tone = f.tone ? toneColor(f.tone) : C.fg;
+        {/* 1段目: 状態 (件数つき。自分の番・相手の番・すべてのあとに、詳細と同じ3段の流れの枠で段ごとに並べる) / 2段目: 種類 */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 6, alignItems: 'center' }}>
+          {FILTER_TOP.map(filterChip)}
+          {FILTER_STEPS.map((g, i) => {
+            const on = g.keys.includes(filter);
             return (
-              <Pressable key={f.key} onPress={() => setFilter(f.key)} style={[s.chip, on && { backgroundColor: tone, borderColor: tone }]}>
-                <Text style={[s.chipText, on && { color: C.card, fontWeight: '600' }]}>
-                  {f.tone && !on && <Text style={{ color: tone }}>● </Text>}
-                  {label}
-                </Text>
-              </Pressable>
+              <View
+                key={g.title}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 6, padding: 4, paddingLeft: 8,
+                  borderColor: on ? C.accent : C.border, borderWidth: 1, borderRadius: 8, backgroundColor: on ? C.accentSubtle : C.bg,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '700', color: C.fg }}>{i + 1}. {g.title}</Text>
+                {g.keys.map(filterChip)}
+              </View>
             );
           })}
         </ScrollView>

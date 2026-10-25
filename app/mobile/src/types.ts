@@ -606,6 +606,14 @@ export const FILTERS = [
   { key: 'all', label: 'すべて', tone: null },
 ] as const satisfies readonly { key: string; label: string; tone: FilterTone | null }[];
 export type FilterKey = (typeof FILTERS)[number]['key'];
+/** 状態のタブのうち、段に分けずに上に出すもの */
+export const FILTER_TOP: FilterKey[] = ['my_turn', 'their_turn', 'all'];
+/** ほかの状態のタブは、詳細の3段の流れ (申請 → 承認 → 実行) と同じ段に分けて並べる */
+export const FILTER_STEPS: { title: string; keys: FilterKey[] }[] = [
+  { title: '申請', keys: ['mine'] },
+  { title: '承認', keys: ['waiting', 'to_review', 'approved'] },
+  { title: '実行', keys: ['purchased', 'closed'] },
+];
 /** 一覧を開いたときのフィルター */
 export const DEFAULT_FILTER: FilterKey = 'waiting';
 /** フィルターごとの件数 (GET /requests/counts。種類・ラベルの絞り込みは反映する) */
