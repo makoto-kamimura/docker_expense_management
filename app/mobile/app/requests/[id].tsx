@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Image, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { apiFetch, getToken, linkPreviewUrl } from '@/api';
-import { checkpoints, dateRange, describeEvent, hostOf, money, timeAgo } from '@/format';
+import { checkpoints, currentPhase, dateRange, describeEvent, flowSteps, hostOf, money, phaseStarted, splitTimeline, timeAgo, type FlowPhase } from '@/format';
 import { AttachmentList, pickAndUpload } from '@/components/Attachments';
 import { Avatar, Button, C, Card, Fact, StatusBadge, s } from '@/components/ui';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
@@ -10,11 +10,18 @@ import { LabelEditor } from '@/components/Labels';
 import { AssigneeEditor } from '@/components/Assignee';
 import { FlowSteps } from '@/components/Flow';
 import { AskLine, AskPicker, ReplyBanner } from '@/components/Asks';
-import { DECISION_LABEL, KIND_TEXT, actorOf, statusLabel, typeOf, viewerRole, type Me, type Member, type RequestDetail, type RequestType } from '@/types';
+import { DECISION_LABEL, KIND_TEXT, actorOf, statusLabel, typeOf, viewerRole, type Me, type Member, type RequestDetail, type RequestKind, type RequestType, type TimelineEntry } from '@/types';
 import { useTheme } from '@/theme';
 import Markdown from '@/components/Markdown';
 
 type Action = 'submit' | 'approve' | 'request-changes' | 'reject' | 'merge' | 'close' | 'reopen';
+
+/** 3段の流れで選んだ段の見出し (Web と同じ) */
+const PHASE_HEAD: Record<FlowPhase, string> = {
+  request: '申請の内容',
+  review: '承認までのやり取り',
+  act: 'マージ後のやり取り',
+};
 
 export default function RequestDetailScreen() {
   useTheme();
@@ -30,6 +37,8 @@ export default function RequestDetailScreen() {
   // 承認後の再オープンに添える「済んでいないこと」(下のコメント欄とは別に持つ)
   const [reopenNote, setReopenNote] = useState('');
   const [busy, setBusy] = useState(false);
+  // 3段の流れで選んだ段。null なら今の段についていく (読み直しでは変えない)
+  const [picked, setPicked] = useState<FlowPhase | null>(null);
 
   // quiet = 自動の読み直し (失敗してもダイアログを出さない)
   const load = useCallback(async (quiet = false) => {
@@ -75,6 +84,17 @@ export default function RequestDetailScreen() {
   const receipts = d.attachments.filter((a) => a.kind === 'receipt');
   const actor = actorOf(d);
   const partyIds = [r.requester_id, ...d.reviewers.map((x) => x.id), ...(d.assignee ? [d.assignee.id] : [])];
+  // 次にやることとコメント欄は今の段にだけ出す
+  const live = currentPhase(r);
+  const phase = picked ?? live;
+  const steps = flowSteps(d);
+  const liveIndex = steps.findIndex((x) => x.phase === live);
+  const timeline = splitTimeline(d.timeline);
+  const started = phaseStarted(r, phase, timeline);
+  // まだ始まっていない段の案内
+  const notYet = phase === 'review'
+    ? (r.status === 'closed' ? '申請する前にクローズしたため、承認の段はありません。' : 'レビューを依頼すると、ここにレビュアーとのやり取りが出ます。')
+    : (r.status === 'closed' ? 'マージされずにクローズしたため、実行の段はありません。' : `マージされると、ここに ${actor.name} が${t.actVerb}までのやり取りが出ます。`);
 
   const run = async (action: Action, withComment = false, text = comment) => {
     setBusy(true);
@@ -170,80 +190,237 @@ export default function RequestDetailScreen() {
         {d.assignee ? ` · 担当者: ${d.assignee.name}` : ''}
       </Text>
 
-      <FlowSteps d={d} meId={me.id} />
+      <FlowSteps d={d} meId={me.id} selected={phase} onSelect={(ph) => setPicked(ph === live ? null : ph)} />
 
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <Text style={{ fontSize: 17, fontWeight: '600', color: C.fg }}>{PHASE_HEAD[phase]}</Text>
+        {phase !== 'request' && <Text style={s.link} onPress={() => router.push(`/history/${r.id}`)}>変更履歴を見る</Text>}
+      </View>
+
+      {phase === 'request' && (<>
+        <Card title={t.reason}>
+          {r.reason ? <Markdown>{r.reason}</Markdown> : <Text style={{ fontSize: 15, lineHeight: 22, color: C.fg }}>—</Text>}
+        </Card>
+
+        {r.approval_tasks && (
+          <Card title="承認したらしてほしいこと" ja={`${d.requester.name} からレビュアーへのお願い`}>
+            <Markdown>{r.approval_tasks}</Markdown>
+          </Card>
+        )}
+
+        <Card
+          title={t.section}
+          right={r.product_url ? <Text style={s.link} onPress={() => Linking.openURL(r.product_url!)}>ページを開く</Text> : undefined}
+        >
+          {productPreview && (
+            <Pressable onPress={() => Linking.openURL(r.product_url!)} style={{ flexDirection: 'row', gap: 10, borderColor: C.border, borderWidth: 1, borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
+              {productPreview.has_image && (
+                <Image
+                  source={{ uri: linkPreviewUrl(productPreview.id), headers: token ? { Authorization: `Bearer ${token}` } : undefined }}
+                  style={{ width: 96, height: 72, backgroundColor: C.bg }}
+                  resizeMode="cover"
+                />
+              )}
+              <View style={{ flex: 1, paddingVertical: 8, paddingRight: 8, paddingLeft: productPreview.has_image ? 0 : 10, justifyContent: 'center' }}>
+                <Text numberOfLines={2} style={{ fontWeight: '600', color: C.fg }}>{productPreview.title ?? r.product_url}</Text>
+                <Text style={s.muted} numberOfLines={1}>{productPreview.site_name ? `${productPreview.site_name} · ` : ''}{hostOf(r.product_url!)} ↗</Text>
+              </View>
+            </Pressable>
+          )}
+          <Fact label={t.product} value={r.product_name ?? '—'} />
+          <Fact label={t.seller} value={r.seller || '—'} />
+          <Fact label={t.priceShort} value={price} />
+          <Fact
+            label={t.productUrl}
+            value={r.product_url ? <Text style={s.link} onPress={() => Linking.openURL(r.product_url!)}>{hostOf(r.product_url)}</Text> : '—'}
+          />
+          <Fact label={t.hasEndDate ? '日程' : t.date} value={dateRange(r.planned_date, r.end_date)} last={!r.notes} />
+          {r.notes && <Fact label="メモ" value={r.notes} last />}
+        </Card>
+
+        {d.alternatives.length > 0 && (
+          <Card title={t.alternatives}>
+            {d.alternatives.map((a) => (
+              <View key={a.id} style={{ flexDirection: 'row', paddingVertical: 6, borderBottomColor: C.borderMuted, borderBottomWidth: 1, gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '600' }}>{a.name}</Text>
+                  {a.notes && <Text style={s.muted}>{a.notes}</Text>}
+                  {a.url && <Text style={s.link} onPress={() => Linking.openURL(a.url!)}>開く</Text>}
+                </View>
+                <Text style={{ fontWeight: '600', color: a.price != null && a.price < r.price ? C.green : C.fg }}>{money(a.price, r.currency)}</Text>
+              </View>
+            ))}
+          </Card>
+        )}
+
+        <Card
+          title="資料"
+          right={p.can_upload_evidence ? <Text style={s.link} onPress={() => upload('evidence')}>＋ 添付</Text> : undefined}
+        >
+          {evidence.length === 0 ? <Text style={s.muted}>添付された資料はありません。</Text> : <AttachmentList files={evidence} token={token} />}
+        </Card>
+      </>)}
+
+      {!started && <Text style={[s.muted, { marginBottom: 12 }]}>{notYet}</Text>}
+
+      {phase === 'review' && started && <TimelineList entries={timeline.review} kind={r.kind} />}
+
+      {phase === 'act' && started && (<>
+        {receipts.length > 0 && (
+          <Card title={t.receipt}>
+            <AttachmentList files={receipts} token={token} />
+          </Card>
+        )}
+        <TimelineList entries={timeline.act} kind={r.kind} />
+      </>)}
+
+      {phase === live ? (<>
+        <ReplyBanner waiting={d.pending_replies} meId={me.id} />
+
+        {/* 次にやること (Web の StatusPanel と同じ分岐) */}
+        <View style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 14, marginVertical: 12, gap: 8 }}>
+          {r.status === 'draft' && (
+            <>
+              <Text style={{ fontWeight: '700' }}>この稟議は下書きです</Text>
+              {p.can_edit && <Button title="編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
+              {p.can_submit ? (
+                <Button title="レビューを依頼する" variant="primary" busy={busy} onPress={() => run('submit')} />
+              ) : p.can_edit ? (
+                // レビュアーがまだいないときは、ボタンの代わりに編集画面へ案内する
+                <>
+                  <Text style={s.muted}>レビューを依頼するには、レビュアーを1人以上選んでください。</Text>
+                  <Button title="レビュアーを選んで依頼する" variant="primary" onPress={() => router.push(`/requests/edit/${r.id}`)} />
+                </>
+              ) : null}
+            </>
+          )}
+
+          {(r.status === 'submitted' || r.status === 'under_review') && (
+            p.can_approve ? (
+              <>
+                <Text style={{ fontWeight: '700' }}>あなたのレビューが依頼されています</Text>
+                <Text style={s.ja}>金額・理由・リンク・資料を確認してください。</Text>
+                <TextInput style={[s.input, s.multi]} multiline value={comment} onChangeText={setComment} placeholder="コメント (再確認を依頼するときは必須)" />
+                <Button title="承認する" variant="primary" busy={busy} onPress={() =>
+                  confirm(
+                    'この稟議を承認しますか？',
+                    `${t.thing}の稟議を承認します。\n\n${t.priceShort}\n${price}` +
+                      (r.approval_tasks ? `\n\n承認したら、次のことをお願いされています:\n${r.approval_tasks}` : ''),
+                    '承認する',
+                    () => run('approve', true),
+                  )} />
+                <Button title="再確認を依頼" disabled={!comment.trim()} onPress={() => run('request-changes', true)} />
+                <AskPicker members={members} meId={me.id} partyIds={partyIds} value={asks} onChange={setAsks} />
+                <Button title={asks.length ? 'コメントして返事をお願いする' : 'コメントだけ送る'} disabled={!comment.trim() || busy} onPress={postComment} />
+                <Button title="却下" variant="danger" onPress={reject} />
+              </>
+            ) : (
+              <>
+                <Text style={{ fontWeight: '700' }}>{d.reviewers.map((x) => x.name).join('、')} のレビュー待ちです</Text>
+                {p.can_close && <Button title="取り下げ" variant="danger" onPress={withdraw} />}
+              </>
+            )
+          )}
+
+          {r.status === 'changes_needed' && (
+            <>
+              <Text style={{ fontWeight: '700', color: C.red }}>
+                {r.requester_id === me.id ? 'レビュアーから確認依頼があります' : `${d.requester.name} の確認を待っています`}
+              </Text>
+              {r.requester_id === me.id && <Text style={s.muted}>コメントを確認して内容を更新し、再申請してください。</Text>}
+              {p.can_edit && <Button title="稟議を編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
+              {p.can_submit && <Button title="再度レビューを依頼" variant="primary" busy={busy} onPress={() => run('submit')} />}
+              {p.can_close && <Button title="取り下げ" variant="danger" onPress={withdraw} />}
+              {p.can_reject && <Button title="却下" variant="danger" onPress={reject} />}
+            </>
+          )}
+
+          {r.status === 'approved' && (
+            <>
+              <Text style={{ fontWeight: '700', color: C.green }}>✓ 承認されました</Text>
+              <Text style={{ fontWeight: '700', color: C.purple, marginTop: 4 }}> マージできます</Text>
+              <Text style={s.muted}>
+                マージすると、{t.thing}はグループに承認されたものとして扱われます (稟議成立)。
+                そのあとは{actor.id === me.id ? 'あなた' : ` ${actor.name} `}の番です ({t.actVerb})。
+              </Text>
+              {p.can_merge ? (
+                <Button title="マージする" variant="merge" busy={busy} onPress={() =>
+                  confirm('この稟議をマージしますか？', `グループが${t.thing}に合意したことを確定します。`, 'マージする', () => run('merge'))} />
+              ) : (
+                <Text style={s.muted}>マージできるのは申請者かレビュアーです。</Text>
+              )}
+              {p.can_reject && <Button title="却下" variant="danger" onPress={reject} />}
+              {tasksFollowUp}
+            </>
+          )}
+
+          {r.status === 'merged' && (
+            <>
+              <Text style={{ fontWeight: '700', color: C.purple }}>マージ済み</Text>
+              <Text style={s.muted}>{t.mergedSub}</Text>
+              {p.can_mark_purchased ? (
+                <Button title={t.markDone} variant="blue" onPress={() => router.push(`/requests/purchase/${r.id}`)} />
+              ) : (
+                <Text style={s.muted}>{actor.name} の{t.waitingDone}を待っています。</Text>
+              )}
+              {tasksFollowUp}
+            </>
+          )}
+
+          {r.status === 'purchased' && (
+            <>
+              <Text style={{ fontWeight: '700', color: C.accent }}>{t.done}</Text>
+              <Fact label={t.actualPrice} value={money(r.actual_price, r.currency)} />
+              <Fact label={t.doneDate} value={r.purchase_date ?? '—'} />
+              {r.order_number && <Fact label={t.orderNo} value={r.order_number} />}
+              {p.can_upload_receipt && <Button title={`${t.receipt}を添付`} onPress={() => upload('receipt')} />}
+            </>
+          )}
+
+          {r.status === 'closed' && (
+            <>
+              <Text style={{ fontWeight: '700', color: C.red }}>
+                {r.close_reason === 'withdrawn' ? '申請者が取り下げました' : '却下されました'}
+              </Text>
+              {p.can_reopen && (
+                <Button
+                  title="再オープン"
+                  busy={busy}
+                  onPress={() =>
+                    confirm('この稟議を再オープンしますか？', 'レビュー待ちに戻して、もう一度レビューしてもらいます。レビュアーの判定はリセットされます。', '再オープンする', () => run('reopen'))
+                  }
+                />
+              )}
+            </>
+          )}
+        </View>
+
+        {p.can_comment && r.status !== 'draft' && !p.can_approve && (
+          <View style={{ gap: 8, marginBottom: 12 }}>
+            <TextInput style={[s.input, s.multi]} multiline value={comment} onChangeText={setComment} placeholder="質問や感想を書きましょう" />
+            <AskPicker members={members} meId={me.id} partyIds={partyIds} value={asks} onChange={setAsks} />
+            <Text style={[s.muted, { fontSize: 12 }]}>Markdown が使えます。URL はそのままリンクになります。返事をお願いした人には通知が届き、その人の番になります。</Text>
+            <Pressable disabled={!comment.trim() || busy} onPress={postComment}>
+              <Text style={[s.link, { textAlign: 'right', fontWeight: '600', opacity: comment.trim() ? 1 : 0.4 }]}>
+                {asks.length ? 'コメントして返事をお願いする' : 'コメントする'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </>) : (
+        // ほかの段を見ているときは、次にやることとコメント欄のある今の段へ案内する
+        <Pressable onPress={() => setPicked(null)} style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12, marginVertical: 12 }}>
+          <Text style={{ color: C.fg }}>
+            今は「{liveIndex + 1}. {steps[liveIndex].title}」の段です。<Text style={s.link}>次にやること・コメントを見る</Text>
+          </Text>
+        </Pressable>
+      )}
+
+      {/* どの段でも出すもの (Web のサイドバーにあたる) */}
       <View style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 12, gap: 12 }}>
         <AssigneeEditor detail={d} onSaved={setD} />
         <LabelEditor detail={d} onSaved={setD} />
       </View>
-
-      <Card title={t.reason}>
-        {r.reason ? <Markdown>{r.reason}</Markdown> : <Text style={{ fontSize: 15, lineHeight: 22, color: C.fg }}>—</Text>}
-      </Card>
-
-      {r.approval_tasks && (
-        <Card title="承認したらしてほしいこと" ja={`${d.requester.name} からレビュアーへのお願い`}>
-          <Markdown>{r.approval_tasks}</Markdown>
-        </Card>
-      )}
-
-      <Card
-        title={t.section}
-        right={r.product_url ? <Text style={s.link} onPress={() => Linking.openURL(r.product_url!)}>ページを開く</Text> : undefined}
-      >
-        {productPreview && (
-          <Pressable onPress={() => Linking.openURL(r.product_url!)} style={{ flexDirection: 'row', gap: 10, borderColor: C.border, borderWidth: 1, borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
-            {productPreview.has_image && (
-              <Image
-                source={{ uri: linkPreviewUrl(productPreview.id), headers: token ? { Authorization: `Bearer ${token}` } : undefined }}
-                style={{ width: 96, height: 72, backgroundColor: C.bg }}
-                resizeMode="cover"
-              />
-            )}
-            <View style={{ flex: 1, paddingVertical: 8, paddingRight: 8, paddingLeft: productPreview.has_image ? 0 : 10, justifyContent: 'center' }}>
-              <Text numberOfLines={2} style={{ fontWeight: '600', color: C.fg }}>{productPreview.title ?? r.product_url}</Text>
-              <Text style={s.muted} numberOfLines={1}>{productPreview.site_name ? `${productPreview.site_name} · ` : ''}{hostOf(r.product_url!)} ↗</Text>
-            </View>
-          </Pressable>
-        )}
-        <Fact label={t.product} value={r.product_name ?? '—'} />
-        <Fact label={t.seller} value={r.seller || '—'} />
-        <Fact label={t.priceShort} value={price} />
-        <Fact
-          label={t.productUrl}
-          value={r.product_url ? <Text style={s.link} onPress={() => Linking.openURL(r.product_url!)}>{hostOf(r.product_url)}</Text> : '—'}
-        />
-        <Fact label={t.hasEndDate ? '日程' : t.date} value={dateRange(r.planned_date, r.end_date)} last={!r.notes} />
-        {r.notes && <Fact label="メモ" value={r.notes} last />}
-      </Card>
-
-      {d.alternatives.length > 0 && (
-        <Card title={t.alternatives}>
-          {d.alternatives.map((a) => (
-            <View key={a.id} style={{ flexDirection: 'row', paddingVertical: 6, borderBottomColor: C.borderMuted, borderBottomWidth: 1, gap: 8 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '600' }}>{a.name}</Text>
-                {a.notes && <Text style={s.muted}>{a.notes}</Text>}
-                {a.url && <Text style={s.link} onPress={() => Linking.openURL(a.url!)}>開く</Text>}
-              </View>
-              <Text style={{ fontWeight: '600', color: a.price != null && a.price < r.price ? C.green : C.fg }}>{money(a.price, r.currency)}</Text>
-            </View>
-          ))}
-        </Card>
-      )}
-
-      <Card
-        title="資料"
-        right={p.can_upload_evidence ? <Text style={s.link} onPress={() => upload('evidence')}>＋ 添付</Text> : undefined}
-      >
-        {evidence.length === 0 ? <Text style={s.muted}>添付された資料はありません。</Text> : <AttachmentList files={evidence} token={token} />}
-      </Card>
-
-      {receipts.length > 0 && (
-        <Card title={t.receipt}>
-          <AttachmentList files={receipts} token={token} />
-        </Card>
-      )}
 
       <Card
         title="分岐"
@@ -283,162 +460,6 @@ export default function RequestDetailScreen() {
         <Button title="まとめ資料を見る" onPress={() => router.push(`/summary/${r.id}`)} style={{ marginTop: 8 }} />
       </Card>
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 8 }}>
-        <Text style={{ fontSize: 17, fontWeight: '600', color: C.fg }}>アクティビティ</Text>
-        <Text style={s.link} onPress={() => router.push(`/history/${r.id}`)}>変更履歴を見る</Text>
-      </View>
-      {d.timeline.map((e) =>
-        e.type === 'comment' ? (
-          <View key={e.id} style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-            <Avatar name={e.user?.name ?? '?'} size={28} />
-            <View style={{ flex: 1, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8 }}>
-              <Text style={{ backgroundColor: C.bg, padding: 8, fontSize: 13 }}>
-                <Text style={{ fontWeight: '700' }}>{e.user?.name ?? '退会したメンバー'}</Text> <Text style={s.muted}>{timeAgo(e.created_at)}にコメント</Text>
-              </Text>
-              <View style={{ padding: 10 }}><Markdown fontSize={14}>{e.body}</Markdown></View>
-              <AskLine asked={e.asked ?? []} />
-            </View>
-          </View>
-        ) : (
-          <Text key={e.id} style={[s.muted, { marginLeft: 36, marginBottom: 8 }]}>
-            • {describeEvent(e, r.kind)}（{timeAgo(e.created_at)}）
-          </Text>
-        ),
-      )}
-
-      <ReplyBanner waiting={d.pending_replies} meId={me.id} />
-
-      {/* 次にやること (Web の StatusPanel と同じ分岐) */}
-      <View style={{ backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 14, marginVertical: 12, gap: 8 }}>
-        {r.status === 'draft' && (
-          <>
-            <Text style={{ fontWeight: '700' }}>この稟議は下書きです</Text>
-            {p.can_edit && <Button title="編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
-            {p.can_submit ? (
-              <Button title="レビューを依頼する" variant="primary" busy={busy} onPress={() => run('submit')} />
-            ) : p.can_edit ? (
-              // レビュアーがまだいないときは、ボタンの代わりに編集画面へ案内する
-              <>
-                <Text style={s.muted}>レビューを依頼するには、レビュアーを1人以上選んでください。</Text>
-                <Button title="レビュアーを選んで依頼する" variant="primary" onPress={() => router.push(`/requests/edit/${r.id}`)} />
-              </>
-            ) : null}
-          </>
-        )}
-
-        {(r.status === 'submitted' || r.status === 'under_review') && (
-          p.can_approve ? (
-            <>
-              <Text style={{ fontWeight: '700' }}>あなたのレビューが依頼されています</Text>
-              <Text style={s.ja}>金額・理由・リンク・資料を確認してください。</Text>
-              <TextInput style={[s.input, s.multi]} multiline value={comment} onChangeText={setComment} placeholder="コメント (再確認を依頼するときは必須)" />
-              <Button title="承認する" variant="primary" busy={busy} onPress={() =>
-                confirm(
-                  'この稟議を承認しますか？',
-                  `${t.thing}の稟議を承認します。\n\n${t.priceShort}\n${price}` +
-                    (r.approval_tasks ? `\n\n承認したら、次のことをお願いされています:\n${r.approval_tasks}` : ''),
-                  '承認する',
-                  () => run('approve', true),
-                )} />
-              <Button title="再確認を依頼" disabled={!comment.trim()} onPress={() => run('request-changes', true)} />
-              <AskPicker members={members} meId={me.id} partyIds={partyIds} value={asks} onChange={setAsks} />
-              <Button title={asks.length ? 'コメントして返事をお願いする' : 'コメントだけ送る'} disabled={!comment.trim() || busy} onPress={postComment} />
-              <Button title="却下" variant="danger" onPress={reject} />
-            </>
-          ) : (
-            <>
-              <Text style={{ fontWeight: '700' }}>{d.reviewers.map((x) => x.name).join('、')} のレビュー待ちです</Text>
-              {p.can_close && <Button title="取り下げ" variant="danger" onPress={withdraw} />}
-            </>
-          )
-        )}
-
-        {r.status === 'changes_needed' && (
-          <>
-            <Text style={{ fontWeight: '700', color: C.red }}>
-              {r.requester_id === me.id ? 'レビュアーから確認依頼があります' : `${d.requester.name} の確認を待っています`}
-            </Text>
-            {r.requester_id === me.id && <Text style={s.muted}>コメントを確認して内容を更新し、再申請してください。</Text>}
-            {p.can_edit && <Button title="稟議を編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
-            {p.can_submit && <Button title="再度レビューを依頼" variant="primary" busy={busy} onPress={() => run('submit')} />}
-            {p.can_close && <Button title="取り下げ" variant="danger" onPress={withdraw} />}
-            {p.can_reject && <Button title="却下" variant="danger" onPress={reject} />}
-          </>
-        )}
-
-        {r.status === 'approved' && (
-          <>
-            <Text style={{ fontWeight: '700', color: C.green }}>✓ 承認されました</Text>
-            <Text style={{ fontWeight: '700', color: C.purple, marginTop: 4 }}> マージできます</Text>
-            <Text style={s.muted}>
-              マージすると、{t.thing}はグループに承認されたものとして扱われます (稟議成立)。
-              そのあとは{actor.id === me.id ? 'あなた' : ` ${actor.name} `}の番です ({t.actVerb})。
-            </Text>
-            {p.can_merge ? (
-              <Button title="マージする" variant="merge" busy={busy} onPress={() =>
-                confirm('この稟議をマージしますか？', `グループが${t.thing}に合意したことを確定します。`, 'マージする', () => run('merge'))} />
-            ) : (
-              <Text style={s.muted}>マージできるのは申請者かレビュアーです。</Text>
-            )}
-            {p.can_reject && <Button title="却下" variant="danger" onPress={reject} />}
-            {tasksFollowUp}
-          </>
-        )}
-
-        {r.status === 'merged' && (
-          <>
-            <Text style={{ fontWeight: '700', color: C.purple }}>マージ済み</Text>
-            <Text style={s.muted}>{t.mergedSub}</Text>
-            {p.can_mark_purchased ? (
-              <Button title={t.markDone} variant="blue" onPress={() => router.push(`/requests/purchase/${r.id}`)} />
-            ) : (
-              <Text style={s.muted}>{actor.name} の{t.waitingDone}を待っています。</Text>
-            )}
-            {tasksFollowUp}
-          </>
-        )}
-
-        {r.status === 'purchased' && (
-          <>
-            <Text style={{ fontWeight: '700', color: C.accent }}>{t.done}</Text>
-            <Fact label={t.actualPrice} value={money(r.actual_price, r.currency)} />
-            <Fact label={t.doneDate} value={r.purchase_date ?? '—'} />
-            {r.order_number && <Fact label={t.orderNo} value={r.order_number} />}
-            {p.can_upload_receipt && <Button title={`${t.receipt}を添付`} onPress={() => upload('receipt')} />}
-          </>
-        )}
-
-        {r.status === 'closed' && (
-          <>
-            <Text style={{ fontWeight: '700', color: C.red }}>
-              {r.close_reason === 'withdrawn' ? '申請者が取り下げました' : '却下されました'}
-            </Text>
-            {p.can_reopen && (
-              <Button
-                title="再オープン"
-                busy={busy}
-                onPress={() =>
-                  confirm('この稟議を再オープンしますか？', 'レビュー待ちに戻して、もう一度レビューしてもらいます。レビュアーの判定はリセットされます。', '再オープンする', () => run('reopen'))
-                }
-              />
-            )}
-          </>
-        )}
-      </View>
-
-      {p.can_comment && r.status !== 'draft' && !p.can_approve && (
-        <View style={{ gap: 8 }}>
-          <TextInput style={[s.input, s.multi]} multiline value={comment} onChangeText={setComment} placeholder="質問や感想を書きましょう" />
-          <AskPicker members={members} meId={me.id} partyIds={partyIds} value={asks} onChange={setAsks} />
-          <Text style={[s.muted, { fontSize: 12 }]}>Markdown が使えます。URL はそのままリンクになります。返事をお願いした人には通知が届き、その人の番になります。</Text>
-          <Pressable disabled={!comment.trim() || busy} onPress={postComment}>
-            <Text style={[s.link, { textAlign: 'right', fontWeight: '600', opacity: comment.trim() ? 1 : 0.4 }]}>
-              {asks.length ? 'コメントして返事をお願いする' : 'コメントする'}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
       {/* 申請者は自分の稟議を、管理者はグループの稟議を、状態に関係なく消せる */}
       {p.can_delete && (
         <Button
@@ -460,5 +481,31 @@ export default function RequestDetailScreen() {
         />
       )}
     </ScrollView>
+  );
+}
+
+/** コメントと操作を時系列に並べる (承認・実行の段で使う) */
+function TimelineList({ entries, kind }: { entries: TimelineEntry[]; kind: RequestKind }) {
+  return (
+    <>
+      {entries.map((e) =>
+        e.type === 'comment' ? (
+          <View key={e.id} style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+            <Avatar name={e.user?.name ?? '?'} size={28} />
+            <View style={{ flex: 1, backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8 }}>
+              <Text style={{ backgroundColor: C.bg, padding: 8, fontSize: 13 }}>
+                <Text style={{ fontWeight: '700' }}>{e.user?.name ?? '退会したメンバー'}</Text> <Text style={s.muted}>{timeAgo(e.created_at)}にコメント</Text>
+              </Text>
+              <View style={{ padding: 10 }}><Markdown fontSize={14}>{e.body}</Markdown></View>
+              <AskLine asked={e.asked ?? []} />
+            </View>
+          </View>
+        ) : (
+          <Text key={e.id} style={[s.muted, { marginLeft: 36, marginBottom: 8 }]}>
+            • {describeEvent(e, kind)}（{timeAgo(e.created_at)}）
+          </Text>
+        ),
+      )}
+    </>
   );
 }

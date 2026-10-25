@@ -341,9 +341,13 @@ input[type=checkbox], input[type=radio] { width: auto; min-height: 0; box-shadow
 .detail-sub strong { color: var(--fg); font-weight: 600; }
 /* 3段の流れ (申請 → 承認 → 実行) */
 .ringi-flow { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 6px; background: var(--bg); overflow: hidden; }
-.ringi-flow-step { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; min-width: 0; }
+.ringi-flow-step { display: flex; min-width: 0; }
 .ringi-flow-step + .ringi-flow-step { border-left: 1px solid var(--border-muted); }
-.ringi-flow-current { box-shadow: inset 0 3px 0 var(--attention-emphasis); }
+.ringi-flow-current .ringi-flow-link { box-shadow: inset 0 3px 0 var(--attention-emphasis); }
+/* 段を押すと、その段の中身に切り替える。選んでいる段は背景と下線で示す */
+.ringi-flow-link { flex: 1; display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; min-width: 0; color: inherit; border-bottom: 2px solid transparent; }
+.ringi-flow-link:hover { text-decoration: none; background: var(--subtle); }
+.ringi-flow-selected .ringi-flow-link { background: var(--accent-subtle); border-bottom-color: var(--accent-emphasis); }
 .ringi-flow-mark { width: 20px; height: 20px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; flex: none; margin-top: 1px; border: 1px solid var(--border); color: var(--muted); background: var(--subtle); }
 .ringi-flow-done .ringi-flow-mark { background: var(--open); border-color: transparent; color: #fff; }
 .ringi-flow-current .ringi-flow-mark { background: var(--attention-subtle); border-color: var(--attention-strong-border); color: var(--attention); }
@@ -357,7 +361,8 @@ input[type=checkbox], input[type=radio] { width: auto; min-height: 0; box-shadow
 @media (max-width: 600px) {
   .ringi-flow { grid-template-columns: 1fr; }
   .ringi-flow-step + .ringi-flow-step { border-left: 0; border-top: 1px solid var(--border-muted); }
-  .ringi-flow-current { box-shadow: inset 3px 0 0 var(--attention-emphasis); }
+  .ringi-flow-current .ringi-flow-link { box-shadow: inset 3px 0 0 var(--attention-emphasis); }
+  .ringi-flow-selected .ringi-flow-link { border-bottom-color: transparent; }
 }
 .detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 256px; gap: 24px; }
 @media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }

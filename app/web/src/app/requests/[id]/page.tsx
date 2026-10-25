@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { apiFetch, getRequestOr404 } from '@/lib/api';
 import { requireUser } from '@/lib/session';
-import { checkpoints, dateRange, fmtDateTime, hostOf, money } from '@/lib/format';
-import { DECISION_LABEL, KIND_TEXT, STATUS_GROUP, statusLabel, typeOf, type Label, type Member, type RequestRef, type RequestType, type ReviewerDecision } from '@/lib/types';
+import { FLOW_PHASES, checkpoints, currentPhase, dateRange, flowSteps, fmtDateTime, hostOf, money, phaseStarted, splitTimeline, type FlowPhase } from '@/lib/format';
+import { DECISION_LABEL, KIND_TEXT, STATUS_GROUP, actorOf, statusLabel, typeOf, type Label, type Member, type RequestRef, type RequestType, type ReviewerDecision } from '@/lib/types';
 import LabelChip from '@/components/LabelChip';
 import LabelPicker from '@/components/LabelPicker';
 import Avatar from '@/components/Avatar';
@@ -30,6 +30,13 @@ const DECISION_ICON: Record<ReviewerDecision, IconName> = {
   rejected: 'x',
 };
 
+/** 3段の流れで選んだ段の見出し */
+const PHASE_HEAD: Record<FlowPhase, string> = {
+  request: '申請の内容',
+  review: '承認までのやり取り',
+  act: 'マージ後のやり取り',
+};
+
 /** 分岐元・分岐先の 1 行 */
 function RefRow({ r, types }: { r: RequestRef; types: RequestType[] }) {
   return (
@@ -46,7 +53,7 @@ function RefRow({ r, types }: { r: RequestRef; types: RequestType[] }) {
   );
 }
 
-export default async function RequestDetailPage({ params }: { params: { id: string } }) {
+export default async function RequestDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { step?: string } }) {
   const user = await requireUser();
   const d = await getRequestOr404(params.id);
   const { request: r, permissions: p } = d;
@@ -63,134 +70,166 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
   const t = KIND_TEXT[r.kind];
   const preview = (url: string | null) => (url ? d.previews.find((pv) => pv.url === url) : undefined);
   const partyIds = [r.requester_id, ...d.reviewers.map((x) => x.id), ...(d.assignee ? [d.assignee.id] : [])];
+  // 3段の流れで選んだ段 (?step=)。指定がなければ今の段。次にやることとコメント欄は今の段にだけ出す
+  const live = currentPhase(r);
+  const phase = FLOW_PHASES.find((x) => x === searchParams.step) ?? live;
+  const steps = flowSteps(d);
+  const liveIndex = steps.findIndex((x) => x.phase === live);
+  const timeline = splitTimeline(d.timeline);
+  const started = phaseStarted(r, phase, timeline);
+  // まだ始まっていない段の案内
+  const notYet = phase === 'review'
+    ? (r.status === 'closed' ? '申請する前にクローズしたため、承認の段はありません。' : 'レビューを依頼すると、ここにレビュアーとのやり取りが出ます。')
+    : (r.status === 'closed' ? 'マージされずにクローズしたため、実行の段はありません。' : `マージされると、ここに ${actorOf(d).name} が${t.actVerb}までのやり取りが出ます。`);
 
   return (
     <div>
       <RequestHeader d={d} canRequest={user.can_request} meId={user.id} />
       <RequestTabs id={r.id} active="conversation" d={d} />
-      <FlowSteps d={d} meId={user.id} />
+      <FlowSteps d={d} meId={user.id} selected={phase} />
       {/* 相手のコメントや操作が、開いたままの画面にも出るように読み直す */}
       <AutoRefresh />
 
       <div className="detail-grid">
         <div>
-          {/* 本文 (PR の説明欄に相当) */}
-          <div className="indent">
-          <div className="tl-comment" style={{ marginTop: 0 }}>
-            <Avatar name={d.requester.name} large />
-            <div className="box">
-              <div className="box-head">
-                <span><strong>{d.requester.name}</strong> <span className="muted">の{t.reason}</span></span>
-                <span className="label label-muted">申請者</span>
+          <h2 className="indent">{PHASE_HEAD[phase]}</h2>
+          {phase === 'request' && (<>
+            {/* 本文 (PR の説明欄に相当) */}
+            <div className="indent">
+            <div className="tl-comment" style={{ marginTop: 0 }}>
+              <Avatar name={d.requester.name} large />
+              <div className="box">
+                <div className="box-head">
+                  <span><strong>{d.requester.name}</strong> <span className="muted">の{t.reason}</span></span>
+                  <span className="label label-muted">申請者</span>
+                </div>
+                <div className="box-body">{r.reason ? <Markdown>{r.reason}</Markdown> : <span className="muted">{t.reason}はまだ書かれていません。</span>}</div>
               </div>
-              <div className="box-body">{r.reason ? <Markdown>{r.reason}</Markdown> : <span className="muted">{t.reason}はまだ書かれていません。</span>}</div>
             </div>
-          </div>
-          </div>
+            </div>
 
-          {r.approval_tasks && (
+            {r.approval_tasks && (
+              <section className="box indent">
+                <div className="box-head">
+                  <h2>承認したらしてほしいこと</h2>
+                  <span className="muted small">{d.requester.name} からレビュアーへのお願い</span>
+                </div>
+                <div className="box-body"><Markdown>{r.approval_tasks}</Markdown></div>
+              </section>
+            )}
+
             <section className="box indent">
               <div className="box-head">
-                <h2>承認したらしてほしいこと</h2>
-                <span className="muted small">{d.requester.name} からレビュアーへのお願い</span>
+                <h2>{t.section}</h2>
+                {r.product_url && (
+                  <a className="btn btn-sm" href={r.product_url} target="_blank" rel="noopener noreferrer">{t.sectionLink}</a>
+                )}
               </div>
-              <div className="box-body"><Markdown>{r.approval_tasks}</Markdown></div>
+              <div className="box-body">
+                {r.product_url && <LinkCard url={r.product_url} preview={preview(r.product_url)} />}
+                <dl className="facts">
+                  <dt>{t.product}</dt><dd>{r.product_name ?? '—'}</dd>
+                  <dt>{t.seller}</dt><dd>{r.seller || '—'}</dd>
+                  <dt>{t.priceShort}</dt><dd><strong>{money(r.price, r.currency)}</strong></dd>
+                  <dt>{t.productUrl}</dt>
+                  <dd>{r.product_url ? <a href={r.product_url} target="_blank" rel="noopener noreferrer">{hostOf(r.product_url)}</a> : '—'}</dd>
+                  <dt>{t.hasEndDate ? '日程' : t.date}</dt><dd>{dateRange(r.planned_date, r.end_date)}</dd>
+                  {r.notes && (<><dt>メモ</dt><dd className="pre">{r.notes}</dd></>)}
+                </dl>
+              </div>
             </section>
-          )}
 
-          <section className="box indent">
-            <div className="box-head">
-              <h2>{t.section}</h2>
-              {r.product_url && (
-                <a className="btn btn-sm" href={r.product_url} target="_blank" rel="noopener noreferrer">{t.sectionLink}</a>
-              )}
-            </div>
-            <div className="box-body">
-              {r.product_url && <LinkCard url={r.product_url} preview={preview(r.product_url)} />}
-              <dl className="facts">
-                <dt>{t.product}</dt><dd>{r.product_name ?? '—'}</dd>
-                <dt>{t.seller}</dt><dd>{r.seller || '—'}</dd>
-                <dt>{t.priceShort}</dt><dd><strong>{money(r.price, r.currency)}</strong></dd>
-                <dt>{t.productUrl}</dt>
-                <dd>{r.product_url ? <a href={r.product_url} target="_blank" rel="noopener noreferrer">{hostOf(r.product_url)}</a> : '—'}</dd>
-                <dt>{t.hasEndDate ? '日程' : t.date}</dt><dd>{dateRange(r.planned_date, r.end_date)}</dd>
-                {r.notes && (<><dt>メモ</dt><dd className="pre">{r.notes}</dd></>)}
-              </dl>
-            </div>
-          </section>
-
-          <section className="box indent">
-            <div className="box-head"><h2>{t.alternatives}</h2></div>
-            {d.alternatives.length === 0 ? (
-              <div className="box-body muted">{t.noAlternatives}。</div>
-            ) : (
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>{t.altName}</th><th className="right">{t.priceShort}</th><th>URL</th><th>メモ</th></tr></thead>
-                  <tbody>
-                    <tr className="current">
-                      <td>
-                        <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-                          {preview(r.product_url)?.has_image && <Thumb id={preview(r.product_url)!.id} size={32} />}
-                          {r.product_name ?? r.title} <span className="label">この稟議</span>
-                        </span>
-                      </td>
-                      <td className="right">{money(r.price, r.currency)}</td>
-                      <td>{r.product_url ? <a href={r.product_url} target="_blank" rel="noopener noreferrer">開く</a> : '—'}</td>
-                      <td />
-                    </tr>
-                    {d.alternatives.map((a) => (
-                      <tr key={a.id}>
+            <section className="box indent">
+              <div className="box-head"><h2>{t.alternatives}</h2></div>
+              {d.alternatives.length === 0 ? (
+                <div className="box-body muted">{t.noAlternatives}。</div>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead><tr><th>{t.altName}</th><th className="right">{t.priceShort}</th><th>URL</th><th>メモ</th></tr></thead>
+                    <tbody>
+                      <tr className="current">
                         <td>
                           <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-                            {preview(a.url)?.has_image && <Thumb id={preview(a.url)!.id} size={32} />}
-                            <span>{a.name}{a.price != null && a.price < r.price && <> <span className="label label-muted">より安い</span></>}</span>
+                            {preview(r.product_url)?.has_image && <Thumb id={preview(r.product_url)!.id} size={32} />}
+                            {r.product_name ?? r.title} <span className="label">この稟議</span>
                           </span>
                         </td>
-                        <td className="right">{money(a.price, r.currency)}</td>
-                        <td>{a.url ? <a href={a.url} target="_blank" rel="noopener noreferrer">開く</a> : '—'}</td>
-                        <td className="muted">{a.notes ?? ''}</td>
+                        <td className="right">{money(r.price, r.currency)}</td>
+                        <td>{r.product_url ? <a href={r.product_url} target="_blank" rel="noopener noreferrer">開く</a> : '—'}</td>
+                        <td />
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          <section className="box indent">
-            <div className="box-head"><h2>資料</h2><span className="counter">{evidence.length}</span></div>
-            <div className="box-body">
-              {evidence.length === 0 ? (
-                <p className="muted" style={{ margin: 0 }}>添付された資料はありません。</p>
-              ) : (
-                <Attachments files={evidence} requestId={r.id} canDelete={p.can_upload_evidence} />
+                      {d.alternatives.map((a) => (
+                        <tr key={a.id}>
+                          <td>
+                            <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                              {preview(a.url)?.has_image && <Thumb id={preview(a.url)!.id} size={32} />}
+                              <span>{a.name}{a.price != null && a.price < r.price && <> <span className="label label-muted">より安い</span></>}</span>
+                            </span>
+                          </td>
+                          <td className="right">{money(a.price, r.currency)}</td>
+                          <td>{a.url ? <a href={a.url} target="_blank" rel="noopener noreferrer">開く</a> : '—'}</td>
+                          <td className="muted">{a.notes ?? ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
-              {p.can_upload_evidence && <AttachmentUpload requestId={r.id} kind="evidence" label="資料を添付" />}
-            </div>
-          </section>
+            </section>
 
-          {receipts.length > 0 && (
             <section className="box indent">
-              <div className="box-head"><h2>{t.receipt}</h2><span className="counter">{receipts.length}</span></div>
+              <div className="box-head"><h2>資料</h2><span className="counter">{evidence.length}</span></div>
               <div className="box-body">
-                <Attachments files={receipts} requestId={r.id} canDelete={p.can_upload_receipt && r.status !== 'purchased'} />
+                {evidence.length === 0 ? (
+                  <p className="muted" style={{ margin: 0 }}>添付された資料はありません。</p>
+                ) : (
+                  <Attachments files={evidence} requestId={r.id} canDelete={p.can_upload_evidence} />
+                )}
+                {p.can_upload_evidence && <AttachmentUpload requestId={r.id} kind="evidence" label="資料を添付" />}
               </div>
             </section>
+          </>)}
+
+          {!started && <p className="indent muted">{notYet}</p>}
+
+          {phase === 'review' && started && (
+            <Timeline entries={timeline.review} requesterId={r.requester_id} meId={user.id} kind={r.kind} />
           )}
 
-          <Timeline entries={d.timeline} requesterId={r.requester_id} meId={user.id} kind={r.kind} />
-          <StatusPanel detail={d} meId={user.id} />
-          {p.can_comment && r.status !== 'draft' && (
-            <div className="indent">
-              <CommentForm
-                requestId={r.id}
-                meId={user.id}
-                meName={user.name}
-                members={members}
-                partyIds={partyIds}
-                waiting={d.pending_replies}
-              />
+          {phase === 'act' && started && (<>
+            {receipts.length > 0 && (
+              <section className="box indent">
+                <div className="box-head"><h2>{t.receipt}</h2><span className="counter">{receipts.length}</span></div>
+                <div className="box-body">
+                  <Attachments files={receipts} requestId={r.id} canDelete={p.can_upload_receipt && r.status !== 'purchased'} />
+                </div>
+              </section>
+            )}
+            <Timeline entries={timeline.act} requesterId={r.requester_id} meId={user.id} kind={r.kind} />
+          </>)}
+
+          {phase === live ? (<>
+            <StatusPanel detail={d} meId={user.id} />
+            {p.can_comment && r.status !== 'draft' && (
+              <div className="indent">
+                <CommentForm
+                  requestId={r.id}
+                  meId={user.id}
+                  meName={user.name}
+                  members={members}
+                  partyIds={partyIds}
+                  waiting={d.pending_replies}
+                />
+              </div>
+            )}
+          </>) : (
+            // ほかの段を見ているときは、次にやることとコメント欄のある今の段へ案内する
+            <div className="box indent">
+              <div className="box-body">
+                今は「{liveIndex + 1}. {steps[liveIndex].title}」の段です。{' '}
+                <Link href={`/requests/${r.id}`}>次にやること・コメントを見る</Link>
+              </div>
             </div>
           )}
         </div>
