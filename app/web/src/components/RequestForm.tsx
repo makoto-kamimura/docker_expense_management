@@ -335,10 +335,10 @@ export default function RequestForm({
         {canSubmit && reviewers.length === 0 && (
           <span className="muted small">レビューを依頼するには、レビュアーを1人以上選んでください</span>
         )}
-        <button type="submit" value="save" disabled={pending}>下書き保存</button>
+        <button type="submit" value="save" disabled={pending}>コミット(下書き保存)</button>
         {canSubmit && (
           <button type="submit" value="submit" className="btn-primary" disabled={pending}>
-            {pending ? '保存中…' : 'レビューを依頼する'}
+            {pending ? '保存中…' : 'プッシュ&プルリクエスト(レビュー依頼)'}
           </button>
         )}
       </div>
