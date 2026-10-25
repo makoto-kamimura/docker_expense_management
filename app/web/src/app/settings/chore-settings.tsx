@@ -96,7 +96,7 @@ function ChoreRow({ chore, onError }: { chore: ChoreStatus; onError: (e: string 
       <button type="button" className="btn-sm" disabled={pending} onClick={() => save(!chore.archived)}>
         {chore.archived ? '再表示' : '非表示にする'}
       </button>
-      <Link href={`/chores/${chore.id}`} className="btn btn-sm">📷 見本 ({chore.images.length})</Link>
+      <Link href={`/chores/${chore.id}`} className="btn btn-sm">📸 見本 ({chore.images.length})</Link>
       <input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
@@ -126,12 +126,12 @@ function ScheduleInputs({ duration, period, times }: { duration?: Field; period?
   return (
     <div className="chore-schedule-inputs">
       <label>
-        <span className="muted small">⏱ 所要時間</span>
+        <span className="muted small">⏱️ 所要時間</span>
         <input type="number" min={1} max={1440} inputMode="numeric" placeholder="—" aria-label="所要時間 (分)" style={{ width: 80 }} {...bind(duration, 'duration_minutes')} />
         <span className="muted small">分</span>
       </label>
       <label>
-        <span className="muted small">🔁 推奨頻度</span>
+        <span className="muted small">🗓️ 推奨頻度</span>
         <select aria-label="推奨頻度の期間" style={{ width: 'auto' }} {...bind(period, 'frequency_period')}>
           <option value="">未設定</option>
           {(Object.keys(FREQUENCY_PERIOD_LABEL) as FrequencyPeriod[]).map((p) => (

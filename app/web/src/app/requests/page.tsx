@@ -10,11 +10,11 @@ import StatusBadge from '@/components/StatusBadge';
 import { Thumb } from '@/components/LinkCard';
 
 const EMPTY_TEXT: Record<FilterKey, string> = {
-  my_turn: 'あなたが対応する稟議はありません 🎉',
+  my_turn: 'あなたが対応する稟議はありません 🥳',
   their_turn: '相手の対応を待っている稟議はありません',
   all: 'まだ稟議がありません',
   waiting: 'レビュー待ちの稟議はありません',
-  to_review: 'あなたのレビュー待ちはありません 🎉',
+  to_review: 'あなたのレビュー待ちはありません 🥳',
   mine: 'あなたの稟議はまだありません',
   approved: '承認済みの稟議はありません',
   purchased: '完了した稟議はありません',

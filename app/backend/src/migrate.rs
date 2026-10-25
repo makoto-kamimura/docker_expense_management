@@ -212,6 +212,8 @@ ALTER TABLE chores ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE chores ADD COLUMN IF NOT EXISTS duration_minutes INT CHECK (duration_minutes BETWEEN 1 AND 1440);
 ALTER TABLE chores ADD COLUMN IF NOT EXISTS frequency_period TEXT CHECK (frequency_period IN ('day', 'week', 'month'));
 ALTER TABLE chores ADD COLUMN IF NOT EXISTS frequency_times  INT CHECK (frequency_times BETWEEN 1 AND 31);
+-- 洗濯のアイコンを 👕 から 🧺 に選び直した。初期の家事と、名前から選んだ 👕 のままの家事だけを変える
+UPDATE chores SET icon = '🧺' WHERE icon = '👕' AND name LIKE '%洗濯%';
 
 CREATE TABLE IF NOT EXISTS chore_commits (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -279,14 +281,14 @@ CREATE TABLE IF NOT EXISTS request_labels (
 );
 CREATE INDEX IF NOT EXISTS idx_request_labels_label ON request_labels(label_id);
 
--- 稟議の種類 (グループごと)。base は入力項目や完了の表現を決める型 (購入型 / 外出・イベント型 / 提案型)。
+-- 稟議の種類 (グループごと)。base は入力項目や完了の表現を決める型 (欲しいもの型 / 行きたいところ型 / やりたいこと型)。
 -- 初期の種類は families.types_seeded で一度だけ入れる
 ALTER TABLE families ADD COLUMN IF NOT EXISTS types_seeded BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE TABLE IF NOT EXISTS request_types (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     family_id  UUID NOT NULL REFERENCES families(id) ON DELETE CASCADE,
     name       TEXT NOT NULL,
-    icon       TEXT NOT NULL DEFAULT '📝',
+    icon       TEXT NOT NULL DEFAULT '🗂️',
     base       request_kind NOT NULL,
     position   INT NOT NULL DEFAULT 0,
     hidden     BOOLEAN NOT NULL DEFAULT FALSE,
@@ -295,6 +297,27 @@ CREATE TABLE IF NOT EXISTS request_types (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_request_types_family_name ON request_types(family_id, lower(name));
 ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS type_id UUID REFERENCES request_types(id);
 CREATE INDEX IF NOT EXISTS idx_requests_type ON purchase_requests(type_id);
+
+-- 初期の種類を「欲しいもの / 行きたいところ / やりたいこと」に改名し、アイコンも選び直した。
+-- 名前は、古い初期の名前のままの種類だけを変える (同じグループに新しい名前の種類がすでにあれば変えない)。
+-- アイコンは、新しい初期の名前で、アイコンが古い初期値のままの種類だけを変える (管理者が選び直したものは変えない)。
+-- 何度流しても同じ結果になる。型は後から足した値があるので、文字列で比べる
+UPDATE request_types t SET name = v.new_name
+  FROM (VALUES
+      ('purchase', '購入', '欲しいもの'),
+      ('outing', '外出・イベント', '行きたいところ'),
+      ('activity', '提案', 'やりたいこと')
+  ) AS v(base, old_name, new_name)
+ WHERE t.base::text = v.base AND t.name = v.old_name
+   AND NOT EXISTS (SELECT 1 FROM request_types o WHERE o.family_id = t.family_id AND lower(o.name) = lower(v.new_name));
+UPDATE request_types t SET icon = v.new_icon
+  FROM (VALUES
+      ('purchase', '欲しいもの', '🛍', '🎁'),
+      ('outing', '行きたいところ', '📍', '🗺️'),
+      ('activity', 'やりたいこと', '✨', '🎯')
+  ) AS v(base, name, old_icon, new_icon)
+ WHERE t.base::text = v.base AND t.name = v.name AND t.icon = v.old_icon;
+ALTER TABLE request_types ALTER COLUMN icon SET DEFAULT '🗂️';
 
 -- 初期ラベルを、グループの種類を問わない名前に変えた。名前と説明が以前の初期値のままのラベルだけを置き換える
 -- (同じグループに新しい名前のラベルがすでにあれば変えない。何度流しても同じ結果になる)

@@ -35,7 +35,7 @@ const MAX_IMAGES: i64 = 10;
 /// 家族を作ったときに用意する家事 (名前, アイコン, 説明)
 pub const DEFAULT_CHORES: &[(&str, &str, &str)] = &[
     ("掃除", "🧹", "部屋・トイレ・お風呂など、どこか1か所でも掃除したら"),
-    ("洗濯", "👕", "洗濯機を回す・干す・たたむのどれかをしたら"),
+    ("洗濯", "🧺", "洗濯機を回す・干す・たたむのどれかをしたら"),
     ("料理", "🍳", "みんなのごはんを1食でも作ったら"),
     ("食器洗い", "🍽️", "食後の食器を洗って片付けたら"),
     ("ゴミ出し", "🗑️", "ゴミをまとめて集積所に出したら"),
@@ -53,7 +53,7 @@ const ICON_KEYWORDS: &[(&[&str], &str)] = &[
     (&["窓"], "🪟"),
     (&["植物", "水やり", "花", "庭"], "🪴"),
     (&["アイロン"], "👔"),
-    (&["洗濯"], "👕"),
+    (&["洗濯"], "🧺"),
     (&["食器", "皿", "食洗"], "🍽️"),
     (&["料理", "ごはん", "ご飯", "弁当", "キッチン", "台所"], "🍳"),
     (&["ゴミ", "ごみ"], "🗑️"),
@@ -118,11 +118,11 @@ fn streaks(days: &BTreeSet<NaiveDate>, today: NaiveDate) -> (i64, i64) {
 fn badges(total_days: i64, longest: i64) -> Vec<Badge> {
     const STREAK: &[(i64, &str, &str, &str)] = &[
         (3, "streak_3", "🔥", "3日連続"),
-        (7, "streak_7", "⭐", "7日連続"),
+        (7, "streak_7", "🌟", "7日連続"),
         (30, "streak_30", "💎", "30日連続"),
     ];
     const TOTAL: &[(i64, &str, &str, &str)] = &[
-        (10, "total_10", "🧹", "累計10日"),
+        (10, "total_10", "🎖️", "累計10日"),
         (50, "total_50", "🏅", "累計50日"),
         (100, "total_100", "👑", "累計100日"),
     ];
@@ -997,7 +997,7 @@ mod tests {
         let chore_b = Uuid::from_u128(2);
         let chores = vec![
             Chore { id: chore_a, name: "掃除".into(), icon: "🧹".into(), description: String::new(), duration_minutes: None, frequency_period: None, frequency_times: None, position: 0, archived: false },
-            Chore { id: chore_b, name: "洗濯".into(), icon: "👕".into(), description: String::new(), duration_minutes: None, frequency_period: None, frequency_times: None, position: 1, archived: false },
+            Chore { id: chore_b, name: "洗濯".into(), icon: "🧺".into(), description: String::new(), duration_minutes: None, frequency_period: None, frequency_times: None, position: 1, archived: false },
         ];
         let today = d("2026-09-23");
         let commits = vec![
@@ -1045,6 +1045,7 @@ mod tests {
         assert_eq!(guess_icon("洗面所掃除/片付け"), "🪥");
         assert_eq!(guess_icon("オレオとお散歩/オレオとかくれんぼ"), "🐾");
         assert_eq!(guess_icon("掃除機をかける"), "🧹");
+        assert_eq!(guess_icon("洗濯物をたたむ"), "🧺");
         assert_eq!(guess_icon("町内会の当番"), "🏠");
     }
 

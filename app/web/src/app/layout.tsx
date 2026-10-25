@@ -31,6 +31,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="ja" data-theme={theme === 'system' ? undefined : theme}>
+      <head>
+        {/*
+          絵文字のデザインを、端末によらず Noto Color Emoji にそろえる (globals.css の font-family の最後で使う)。
+          ブラウザごとに合う形式 (Safari 向けなど) を Google Fonts が選ぶので、ビルド時に取り込まずにここで読み込む
+        */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" />
+      </head>
       <body>
         <header className="header">
           <div className="header-inner" style={user ? undefined : { paddingBottom: 16 }}>
