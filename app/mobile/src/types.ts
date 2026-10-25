@@ -587,18 +587,24 @@ export const DECISION_LABEL: Record<ReviewerDecision, string> = {
   rejected: '却下',
 };
 
-/** 一覧のフィルター (並びはタブの順。「すべて」は最後) */
+/** フィルターのタブの色 */
+export type FilterTone = 'yellow' | 'gray' | 'green' | 'orange' | 'pink' | 'purple' | 'blue' | 'red';
+
+/**
+ * 一覧のフィルター (並びはタブの順。「すべて」は最後)。tone はタブの色で、状態のバッジと同じ色にそろえる
+ * (レビュー待ち = 緑、承認済み = マージの紫、完了 = 青、クローズ = 赤)。自分の番は「あなたの番」の印と同じ黄
+ */
 export const FILTERS = [
-  { key: 'my_turn', label: '自分の番' },
-  { key: 'their_turn', label: '相手の番' },
-  { key: 'waiting', label: 'レビュー待ち' },
-  { key: 'to_review', label: '自分のレビュー待ち' },
-  { key: 'mine', label: '自分の申請' },
-  { key: 'approved', label: '承認済み' },
-  { key: 'purchased', label: '完了' },
-  { key: 'closed', label: 'クローズ' },
-  { key: 'all', label: 'すべて' },
-] as const;
+  { key: 'my_turn', label: '自分の番', tone: 'yellow' },
+  { key: 'their_turn', label: '相手の番', tone: 'gray' },
+  { key: 'waiting', label: 'レビュー待ち', tone: 'green' },
+  { key: 'to_review', label: '自分のレビュー待ち', tone: 'orange' },
+  { key: 'mine', label: '自分の申請', tone: 'pink' },
+  { key: 'approved', label: '承認済み', tone: 'purple' },
+  { key: 'purchased', label: '完了', tone: 'blue' },
+  { key: 'closed', label: 'クローズ', tone: 'red' },
+  { key: 'all', label: 'すべて', tone: null },
+] as const satisfies readonly { key: string; label: string; tone: FilterTone | null }[];
 export type FilterKey = (typeof FILTERS)[number]['key'];
 /** 一覧を開いたときのフィルター */
 export const DEFAULT_FILTER: FilterKey = 'waiting';

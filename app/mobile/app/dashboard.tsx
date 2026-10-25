@@ -3,9 +3,9 @@ import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { apiFetch } from '@/api';
 import { money } from '@/format';
-import { C, Card, s } from '@/components/ui';
+import { C, Card, s, toneColor } from '@/components/ui';
 import { ChoreBadges, ContributionGraph } from '@/components/Contributions';
-import type { ChoresResp, Dashboard } from '@/types';
+import { FILTERS, type ChoresResp, type Dashboard, type FilterKey, type FilterTone } from '@/types';
 import { LabelChip } from '@/components/Labels';
 import { useTheme } from '@/theme';
 
@@ -22,23 +22,34 @@ export default function DashboardScreen() {
   const me = chores.me;
   const choreMax = Math.max(1, ...me.by_chore.map((c) => c.days));
   const max = Math.max(1, ...d.by_label.map((c) => c.total));
-  const stats: [string, string | number][] = [
-    ['自分の番', d.my_turn],
-    ['相手の番', d.their_turn],
-    ['稟議の数', d.total_requests],
-    ['レビュー待ち', d.waiting_for_review],
-    ['自分のレビュー待ち', d.waiting_for_my_review],
-    ['承認済み', d.approved],
-    ['完了', d.purchased],
-    ['支出の合計', money(d.total_spending, d.currency)],
+  // 件数カードの色は、一覧の状態のタブと同じ (稟議の数・支出の合計は色なし)
+  const toneOf = (key: FilterKey) => FILTERS.find((f) => f.key === key)?.tone ?? null;
+  const stats: [string, string | number, FilterTone | null][] = [
+    ['自分の番', d.my_turn, toneOf('my_turn')],
+    ['相手の番', d.their_turn, toneOf('their_turn')],
+    ['稟議の数', d.total_requests, null],
+    ['レビュー待ち', d.waiting_for_review, toneOf('waiting')],
+    ['自分のレビュー待ち', d.waiting_for_my_review, toneOf('to_review')],
+    ['承認済み', d.approved, toneOf('approved')],
+    ['完了', d.purchased, toneOf('purchased')],
+    ['支出の合計', money(d.total_spending, d.currency), null],
   ];
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={{ padding: 12 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        {stats.map(([k, v]) => (
-          <View key={k} style={{ width: '48.5%', backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12 }}>
-            <Text style={[s.muted, { fontWeight: '600', fontSize: 12 }]}>{k}</Text>
+        {stats.map(([k, v, tone]) => (
+          <View
+            key={k}
+            style={{
+              width: '48.5%', backgroundColor: C.card, borderColor: C.border, borderWidth: 1, borderRadius: 8, padding: 12,
+              ...(tone && { borderLeftWidth: 3, borderLeftColor: toneColor(tone) }),
+            }}
+          >
+            <Text style={[s.muted, { fontWeight: '600', fontSize: 12 }]}>
+              {tone && <Text style={{ color: toneColor(tone) }}>● </Text>}
+              {k}
+            </Text>
             <Text style={{ fontSize: 22, fontWeight: '600', color: C.fg }}>{v}</Text>
           </View>
         ))}

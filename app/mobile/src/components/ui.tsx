@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import { STATUS_GROUP, statusHint, statusLabel, type RequestKind, type RequestStatus, type ViewerRole } from '@/types';
+import { STATUS_GROUP, statusHint, statusLabel, type FilterTone, type RequestKind, type RequestStatus, type ViewerRole } from '@/types';
 
 // Web (globals.css) と同じ GitHub (Primer) の配色。ライト / ダークの2組を持ち、applyPalette で切り替える
 const LIGHT = {
@@ -29,6 +29,7 @@ const LIGHT = {
   attentionBorder: '#d4a72c',
   attentionBorderMuted: '#d4a72c66',
   severe: '#bc4c00',
+  pink: '#bf3989',
   underline: '#fd8c73',
   /** 草グラフの濃さ 0〜4 */
   contrib: ['#eff2f5', '#aceebb', '#4ac26b', '#2da44e', '#116329'],
@@ -63,6 +64,7 @@ const DARK: Palette = {
   attentionBorder: '#bb8009',
   attentionBorderMuted: '#bb800966',
   severe: '#db6d28',
+  pink: '#db61a2',
   underline: '#f78166',
   contrib: ['#151b23', '#033a16', '#196c2e', '#2ea043', '#56d364'],
 };
@@ -80,6 +82,15 @@ export function applyPalette(scheme: 'light' | 'dark') {
 export function statusColor(status: RequestStatus): string {
   const group = { open: C.green, draft: C.gray, merged: C.purple, done: C.accent, closed: C.closed };
   return group[STATUS_GROUP[status]];
+}
+
+/** 一覧の状態のタブの色 (FILTERS の tone。Web の .tone-* と同じ) */
+export function toneColor(tone: FilterTone): string {
+  const color: Record<FilterTone, string> = {
+    yellow: C.yellow, gray: C.muted, green: C.green, orange: C.severe,
+    pink: C.pink, purple: C.purple, blue: C.accent, red: C.red,
+  };
+  return color[tone];
 }
 
 /**
