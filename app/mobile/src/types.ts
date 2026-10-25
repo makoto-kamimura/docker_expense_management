@@ -12,7 +12,7 @@ export type RequestStatus =
 
 export type RequestCategory =
   | 'home' | 'electronics' | 'hobby' | 'travel' | 'education' | 'other' | 'leisure' | 'dining';
-/** 稟議の型 (入力項目と完了の表現を決める): purchase = 購入型 / outing = 外出・イベント型 / activity = 提案型。
+/** 稟議の型 (入力項目と完了の表現を決める): purchase = 欲しいもの型 / outing = 行きたいところ型 / activity = やりたいこと型。
  * 種類 (RequestType) はグループごとに作れ、どれかの型を土台にする */
 export type RequestKind = 'purchase' | 'outing' | 'activity';
 export const KINDS: RequestKind[] = ['purchase', 'outing', 'activity'];
@@ -339,9 +339,9 @@ export const CATEGORY_LABEL: Record<RequestCategory, string> = {
 
 /** 型の名前 */
 export const KIND_LABEL: Record<RequestKind, string> = {
-  purchase: '購入型',
-  outing: '外出・イベント型',
-  activity: '提案型',
+  purchase: '欲しいもの型',
+  outing: '行きたいところ型',
+  activity: 'やりたいこと型',
 };
 
 export interface KindText {
@@ -396,8 +396,8 @@ export interface KindText {
  */
 export const KIND_TEXT: Record<RequestKind, KindText> = {
   purchase: {
-    icon: '🛍',
-    what: '購入',
+    icon: '🎁',
+    what: '欲しいもの',
     titleExample: '例: グループ旅行用の新しいカメラ',
     price: '金額',
     priceShort: '金額',
@@ -420,7 +420,7 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
     altExample: '例: 商品A',
     noAlternatives: '他の商品とは比較していません',
     compare: '商品と比較',
-    eyebrow: '購入稟議',
+    eyebrow: '欲しいものの稟議',
     thing: 'この購入',
     mergeSub: '承認を確定して、購入を許可します。',
     mergedSub: '稟議が成立しました。購入して、購入済みにしましょう。',
@@ -439,8 +439,8 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
     evidenceHint: '見積書・レビュー・スクリーンショット',
   },
   outing: {
-    icon: '📍',
-    what: '外出・イベント',
+    icon: '🗺️',
+    what: '行きたいところ',
     titleExample: '例: 週末に水族館へ行きたい',
     price: '予算 (交通費・入場料など)',
     priceShort: '予算',
@@ -463,7 +463,7 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
     altExample: '例: 動物園',
     noAlternatives: '他の候補とは比べていません',
     compare: '行き先と候補',
-    eyebrow: 'お出かけの稟議',
+    eyebrow: '行きたいところの稟議',
     thing: 'このお出かけ',
     mergeSub: '承認を確定して、お出かけを決定します。',
     mergedSub: '稟議が成立しました。出かけたら「行ってきた」にしましょう。',
@@ -482,8 +482,8 @@ export const KIND_TEXT: Record<RequestKind, KindText> = {
     evidenceHint: 'パンフレット・スクリーンショットなど',
   },
   activity: {
-    icon: '✨',
-    what: '提案',
+    icon: '🎯',
+    what: 'やりたいこと',
     titleExample: '例: ピアノを習いたい',
     price: '費用の見込み',
     priceShort: '費用',

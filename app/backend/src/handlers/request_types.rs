@@ -19,12 +19,16 @@ const MAX_NAME: usize = 20;
 /// アイコン (絵文字) の最大文字数。肌の色や結合文字を含む絵文字があるので少し余裕を持たせる
 const MAX_ICON: usize = 8;
 
-/// グループを作ったときに用意する種類 (名前, アイコン, 型)。型ごとに 1 つずつ
+/// グループを作ったときに用意する種類 (名前, アイコン, 型)。型ごとに 1 つずつ。
+/// 以前の初期値 (🛍 購入 / 📍 外出・イベント / ✨ 提案) のままの種類は、起動時に migrate.rs で置き換える
 pub const DEFAULT_TYPES: &[(&str, &str, RequestKind)] = &[
-    ("購入", "🛍", RequestKind::Purchase),
-    ("外出・イベント", "📍", RequestKind::Outing),
-    ("提案", "✨", RequestKind::Activity),
+    ("欲しいもの", "🎁", RequestKind::Purchase),
+    ("行きたいところ", "🗺️", RequestKind::Outing),
+    ("やりたいこと", "🎯", RequestKind::Activity),
 ];
+
+/// アイコンを入れずに作った種類のアイコン
+const FALLBACK_ICON: &str = "🗂️";
 
 /// まだ初期の種類を入れていないグループに入れる。families.types_seeded で一度きりにするので、
 /// 管理者が種類を消しても、起動し直したときに復活しない。
@@ -147,7 +151,7 @@ fn validate(input: &RequestTypeInput) -> ApiResult<(String, String)> {
     if name.is_empty() || name.chars().count() > MAX_NAME {
         return Err(ApiError::BadRequest(format!("種類の名前を{MAX_NAME}文字以内で入力してください")));
     }
-    let icon = input.icon.as_deref().map(str::trim).filter(|s| !s.is_empty()).unwrap_or("📝");
+    let icon = input.icon.as_deref().map(str::trim).filter(|s| !s.is_empty()).unwrap_or(FALLBACK_ICON);
     if icon.chars().count() > MAX_ICON {
         return Err(ApiError::BadRequest("アイコンは絵文字1つにしてください".into()));
     }

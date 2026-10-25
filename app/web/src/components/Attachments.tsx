@@ -27,12 +27,12 @@ export default function Attachments({
                   <span className="file-icon" aria-hidden="true">📄</span>
                 </object>
               ) : (
-                <span className="file-icon" aria-hidden="true">🖼</span>
+                <span className="file-icon" aria-hidden="true">🖼️</span>
               )}
             </a>
             <div className="file-meta">
               <span>
-                <span aria-hidden="true">{isPdf(f.content_type) ? '📄 ' : '🖼 '}</span>
+                <span aria-hidden="true">{isPdf(f.content_type) ? '📄 ' : '🖼️ '}</span>
                 <a href={src} target="_blank" rel="noreferrer">{f.file_name}</a>
                 <span className="muted"> · {Math.max(1, Math.round(f.byte_size / 1024))} KB</span>
               </span>

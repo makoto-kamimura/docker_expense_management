@@ -43,7 +43,7 @@ export default function RequestTypeSettings({ types }: { types: RequestType[] })
         action={(fd) => run(() => createRequestTypeAction(fd), () => addForm.current?.reset())}
         className="box-row actions"
       >
-        <input name="icon" placeholder="📝" aria-label="種類のアイコン (絵文字)" maxLength={8} style={{ width: 56, textAlign: 'center' }} />
+        <input name="icon" placeholder="🗂️" aria-label="種類のアイコン (絵文字)" maxLength={8} style={{ width: 56, textAlign: 'center' }} />
         <input name="name" placeholder="例: 備品の購入" aria-label="種類の名前" required maxLength={20} style={{ width: 180 }} />
         <select name="base" aria-label="種類の型" defaultValue="purchase" style={{ width: 'auto' }}>
           {KINDS.map((k) => <option key={k} value={k}>{KIND_TEXT[k].icon} {KIND_LABEL[k]}</option>)}

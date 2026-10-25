@@ -104,7 +104,7 @@ export default async function SettingsPage() {
         <div className="box" id="types">
           <div className="box-head">
             <h2>稟議の種類</h2>
-            <span className="muted small">型 (購入型 / 外出・イベント型 / 提案型) で入力項目が決まります。稟議がある種類は非表示にできます</span>
+            <span className="muted small">型 (欲しいもの型 / 行きたいところ型 / やりたいこと型) で入力項目が決まります。稟議がある種類は非表示にできます</span>
           </div>
           <RequestTypeSettings types={types} />
         </div>

@@ -360,7 +360,7 @@ export function choreScheduleLabel(c: Chore): string | null {
   const d = durationLabel(c.duration_minutes);
   const f = frequencyLabel(c);
   if (!d && !f) return null;
-  return [d && `⏱ ${d}`, f && `🔁 ${f}`].filter(Boolean).join(' · ');
+  return [d && `⏱️ ${d}`, f && `🗓️ ${f}`].filter(Boolean).join(' · ');
 }
 
 /** 「今日の家事」を推奨頻度で切り替えるタブ。all 以外は頻度の期間 (毎日 / 週 / 月) が一致する家事だけ */
@@ -403,7 +403,7 @@ export function choreTimeTotalLabel(chores: Chore[], tab: ChorePeriodTab): strin
     ? ` · ${FREQUENCY_PERIOD_LABEL[tab]}あたり ${durationLabel(t.perPeriod)}`
     : '';
   const missing = t.missing ? ` (所要時間が未設定の${t.missing}件は含まない)` : '';
-  return `合計 ⏱ ${durationLabel(t.once)}${per}${missing}`;
+  return `合計 ⏱️ ${durationLabel(t.once)}${per}${missing}`;
 }
 
 

@@ -87,7 +87,7 @@ export default function PurchaseScreen() {
       <Card title={t.receipt}>
         {receipts.length > 0 ? <AttachmentList files={receipts} token={token} /> : <Text style={s.muted}>まだ添付されていません。</Text>}
         <View style={{ gap: 8, marginTop: 10 }}>
-          <Button title="📷 レシートを撮影して自動入力" variant="blue" busy={busy === 'scan'} onPress={scan} />
+          <Button title="📸 レシートを撮影して自動入力" variant="blue" busy={busy === 'scan'} onPress={scan} />
           <Button title="写真・ファイルから添付" onPress={async () => { if (await pickAndUpload(id!, 'receipt')) load(); }} />
         </View>
       </Card>

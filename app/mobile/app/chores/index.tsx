@@ -163,7 +163,7 @@ export default function ChoresScreen() {
                 {inPeriod.length === 0
                   ? 'この頻度の家事はありません (推奨頻度は Web の設定画面で設定できます)'
                   : filter === 'todo' && !query
-                    ? `🎉 ${period === 'all' ? '今日の家事' : 'この頻度の家事'}はすべてコミットしました`
+                    ? `🥳 ${period === 'all' ? '今日の家事' : 'この頻度の家事'}はすべてコミットしました`
                     : '該当する家事はありません'}
               </Text>
             )}

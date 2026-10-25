@@ -36,7 +36,7 @@ export default function ChoreButton({ chore, linked = false }: { chore: ChoreSta
       {chore.description && <div className="chore-desc muted small">{chore.description}</div>}
       {choreScheduleLabel(chore) && <div className="chore-schedule small">{choreScheduleLabel(chore)}</div>}
       {linked && chore.images.length > 0 && (
-        <Link href={detail} className="small">📷 見本 {chore.images.length}枚</Link>
+        <Link href={detail} className="small">📸 見本 {chore.images.length}枚</Link>
       )}
       <div className="chore-marks">
         {chore.current_streak > 0 && <span className="label chore-streak">🔥 {chore.current_streak}日連続</span>}

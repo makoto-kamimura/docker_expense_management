@@ -35,7 +35,7 @@ export default async function DashboardPage() {
           {myTurn.length > MY_TURN_LIMIT && <Link href="/requests?filter=my_turn" className="small">すべて見る ({myTurn.length}件)</Link>}
         </div>
         {myTurn.length === 0 ? (
-          <div className="box-body"><p className="muted" style={{ margin: 0 }}>今あなたが対応する稟議はありません 🎉</p></div>
+          <div className="box-body"><p className="muted" style={{ margin: 0 }}>今あなたが対応する稟議はありません 🥳</p></div>
         ) : (
           myTurn.slice(0, MY_TURN_LIMIT).map((r) => (
             <div key={r.id} className="box-row" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
