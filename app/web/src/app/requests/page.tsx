@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { requireUser } from '@/lib/session';
 import { money, timeAgo } from '@/lib/format';
-import { DEFAULT_FILTER, FILTERS, STATUS_GROUP, statusLabel, typeOf, type FilterKey, type Label, type LinkedRequest, type RequestCounts, type RequestListItem, type RequestType } from '@/lib/types';
+import { DEFAULT_FILTER, FILTERS, FILTER_STEPS, FILTER_TOP, STATUS_GROUP, statusLabel, typeOf, type FilterKey, type Label, type LinkedRequest, type RequestCounts, type RequestListItem, type RequestType } from '@/lib/types';
 import LabelChip from '@/components/LabelChip';
 import Octicon, { statusIcon } from '@/components/Octicon';
 import StatusBadge from '@/components/StatusBadge';
@@ -52,6 +52,21 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
     if (l) q.set('label', l);
     return q.toString() ? `/requests?${q}` : '/requests';
   };
+  // 状態のタブ 1つ (色の点と件数つき)
+  const filterTab = (key: FilterKey) => {
+    const f = FILTERS.find((x) => x.key === key)!;
+    return (
+      <Link
+        key={f.key}
+        href={href(f.key, kind)}
+        className={[f.key === filter && 'on', f.tone && `toned tone-${f.tone}`].filter(Boolean).join(' ')}
+        aria-current={f.key === filter ? 'page' : undefined}
+      >
+        {f.label}
+        <span className="counter">{counts[f.key]}</span>
+      </Link>
+    );
+  };
 
   return (
     <div>
@@ -65,20 +80,19 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
 
       <div className="box">
         <div className="box-head list-filters">
-          <nav className="filters" aria-label="状態で絞り込み">
-            {FILTERS.map((f) => (
-              <Link
-                key={f.key}
-                href={href(f.key, kind)}
-                className={[f.key === filter && 'on', f.tone && `toned tone-${f.tone}`].filter(Boolean).join(' ')}
-                aria-current={f.key === filter ? 'page' : undefined}
-              >
-                {f.label}
-                <span className="counter">{counts[f.key]}</span>
-              </Link>
+          {/* 状態: 自分の番・相手の番・すべての下に、詳細と同じ3段の流れの枠で段ごとのタブを並べる */}
+          <nav className="filters" aria-label="状態で絞り込み">{FILTER_TOP.map(filterTab)}</nav>
+          <ol className="ringi-flow filter-steps" aria-label="流れの段で絞り込み">
+            {FILTER_STEPS.map((g, i) => (
+              <li key={g.title} className={`ringi-flow-step${g.keys.includes(filter) ? ' ringi-flow-selected' : ''}`}>
+                <div className="filter-step">
+                  <span className="ringi-flow-title">{i + 1}. {g.title}</span>
+                  <div className="filters">{g.keys.map(filterTab)}</div>
+                </div>
+              </li>
             ))}
-          </nav>
-          <nav className="filters" aria-label="種類で絞り込み">
+          </ol>
+          <nav className="filters filters-type" aria-label="種類で絞り込み">
             {([null, ...typeTabs] as (RequestType | null)[]).map((x) => (
               <Link key={x?.id ?? 'any'} href={href(filter, x?.id ?? null)} className={(x?.id ?? null) === kind ? 'on' : ''}>
                 {x ? `${x.icon} ${x.name}` : 'すべての種類'}

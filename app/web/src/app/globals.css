@@ -327,9 +327,19 @@ input[type=checkbox], input[type=radio] { width: auto; min-height: 0; box-shadow
 .req-title { font-weight: 600; font-size: 16px; color: var(--fg); margin-right: 4px; }
 .req-title:hover { color: var(--accent); text-decoration: none; }
 .req-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 4px; }
-/* 一覧の絞り込み: 1段目が状態、2段目が種類 */
+/* 一覧の絞り込み: 状態 (上のタブと、3段の流れの枠)、その下に種類 */
 .list-filters { flex-direction: column; align-items: stretch; gap: 8px; }
-.list-filters .filters + .filters { margin-left: 0; padding-top: 8px; border-top: 1px solid var(--border); font-size: 13px; }
+.list-filters .filters-type { margin-left: 0; padding-top: 8px; border-top: 1px solid var(--border); font-size: 13px; }
+/* 状態のタブを、詳細の3段の流れ (.ringi-flow) と同じ枠で段ごとに並べる。選んでいるタブがある段は背景と下線で示す */
+.filter-steps { margin: 0; }
+.filter-step { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; min-width: 0; border-bottom: 2px solid transparent; }
+.filter-steps .filters { flex-direction: column; align-items: flex-start; gap: 4px; }
+.filter-steps .ringi-flow-selected .filter-step { background: var(--accent-subtle); border-bottom-color: var(--accent-emphasis); }
+@media (max-width: 600px) {
+  .filter-step { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  .filter-steps .filters { flex-direction: row; flex-wrap: wrap; gap: 4px 16px; }
+  .filter-steps .ringi-flow-selected .filter-step { border-bottom-color: transparent; }
+}
 .list-filters .filters .counter { margin-left: 2px; }
 .list-filters .filters > span:last-child { margin-left: auto; }
 .list-filters .filters a.on .counter { background: var(--fg); color: var(--bg); }
