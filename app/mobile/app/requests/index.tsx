@@ -4,7 +4,6 @@ import { router, useFocusEffect } from 'expo-router';
 import { apiFetch, clearToken, getToken, linkPreviewUrl } from '@/api';
 import { money, timeAgo } from '@/format';
 import { Button, C, s, StatusBadge, statusColor } from '@/components/ui';
-import { LabelList } from '@/components/Labels';
 import { NotificationButton } from '@/components/NotificationButton';
 import { DEFAULT_FILTER, FILTERS, statusLabel, typeOf, type FilterKey, type LinkedRequest, type Me, type RequestCounts, type RequestListItem, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
@@ -139,20 +138,19 @@ export default function RequestsScreen() {
               />
             )}
             <View style={{ flex: 1, gap: 4 }}>
-              {/* 状態と金額 / タイトル / ラベル / 申請者・レビュアー・更新 */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <StatusBadge status={item.status} kind={item.kind} viewer={item.viewer_role} myTurn={item.my_turn} asked={item.asked_to_reply} />
+              {/* タイトルと金額 / 状態・申請者・レビュアー・更新 */}
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                <Text style={{ flex: 1, fontSize: 16, fontWeight: '600', color: C.fg }}>{item.title}</Text>
                 <Text style={{ fontSize: 16, fontWeight: '700', color: C.fg }}>{money(item.actual_price ?? item.price, item.currency)}</Text>
               </View>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: C.fg }}>{typeOf(types, item.type_id, item.kind).icon} {item.title}</Text>
-              <LabelList labels={item.labels} />
-              <Text style={s.muted}>
-                #{item.id.slice(0, 7)} · {item.requester_name} の申請 · レビュアー: {item.reviewer_names.join('、') || '—'}
-                {item.assignee_name ? ` · 担当: ${item.assignee_name}` : ''}
-              </Text>
-              <Text style={s.muted}>
-                {timeAgo(item.updated_at)}に更新{item.comment_count > 0 ? ` · 💬 ${item.comment_count}` : ''}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <StatusBadge status={item.status} kind={item.kind} viewer={item.viewer_role} myTurn={item.my_turn} asked={item.asked_to_reply} />
+                <Text style={s.muted}>
+                  {item.requester_name} の申請 · レビュアー: {item.reviewer_names.join('、') || '—'}
+                  {item.assignee_name ? ` · 担当: ${item.assignee_name}` : ''}
+                  {' '}· {timeAgo(item.updated_at)}に更新{item.comment_count > 0 ? ` · 💬 ${item.comment_count}` : ''}
+                </Text>
+              </View>
               <Linked item={item} types={types} open={open.has(item.id)} onToggle={() => toggle(item.id)} />
             </View>
           </Pressable>
@@ -178,7 +176,7 @@ function Linked({ item, types, open, onToggle }: { item: RequestListItem; types:
         {typeOf(types, x.type_id, x.kind).icon} {x.title}
       </Text>
       <Text style={[s.muted, { fontSize: 12 }]}>
-        #{x.id.slice(0, 7)} · {x.requester_name} · {statusLabel(x.kind, x.status)} · {money(x.actual_price ?? x.price, x.currency)}
+        {x.requester_name} · {statusLabel(x.kind, x.status)} · {money(x.actual_price ?? x.price, x.currency)}
       </Text>
     </Pressable>
   );

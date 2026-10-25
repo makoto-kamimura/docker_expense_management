@@ -21,9 +21,6 @@ const EMPTY_TEXT: Record<FilterKey, string> = {
   closed: 'クローズした稟議はありません',
 };
 
-/** 申請番号 (ID の先頭 7 桁)。GitHub の #123 の代わり */
-const shortId = (id: string) => id.slice(0, 7);
-
 export default async function RequestsPage({ searchParams }: { searchParams: { filter?: string; type?: string; label?: string } }) {
   const user = await requireUser();
   if (!user.onboarded) redirect('/onboarding');
@@ -107,19 +104,15 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
           items.map((r) => (
             <div key={r.id} className="req-item">
               <div className="req-main">
-                <div className="req-head">
-                  <StatusBadge status={r.status} kind={r.kind} small viewer={r.viewer_role} myTurn={r.my_turn} asked={r.asked_to_reply} />
-                  <Link href={`/requests/${r.id}`} className="req-title">{r.title}</Link>
-                </div>
-                <div className="req-tags">
-                  <TypeChip r={r} types={types} href={r.type_id ? href(filter, r.type_id) : null} />
-                  {r.labels.map((l) => <LabelChip key={l.id} label={l} href={href(filter, kind, l.id)} />)}
-                </div>
+                <Link href={`/requests/${r.id}`} className="req-title">{r.title}</Link>
                 <div className="req-meta">
-                  #{shortId(r.id)} · {r.requester_name} の申請
-                  {r.reviewer_names.length > 0 && <> · レビュアー: {r.reviewer_names.join('、')}</>}
-                  {r.assignee_name && <> · 担当: {r.assignee_name}</>}
-                  {' '}· {timeAgo(r.updated_at)}に更新
+                  <StatusBadge status={r.status} kind={r.kind} small viewer={r.viewer_role} myTurn={r.my_turn} asked={r.asked_to_reply} />
+                  <span>
+                    {r.requester_name} の申請
+                    {r.reviewer_names.length > 0 && <> · レビュアー: {r.reviewer_names.join('、')}</>}
+                    {r.assignee_name && <> · 担当: {r.assignee_name}</>}
+                    {' '}· {timeAgo(r.updated_at)}に更新
+                  </span>
                 </div>
                 <LinkedRequests r={r} types={types} />
               </div>
@@ -136,13 +129,6 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
       </div>
     </div>
   );
-}
-
-/** 行の種類。押すとその種類で絞り込む (種類のない古い稟議は押せない) */
-function TypeChip({ r, types, href }: { r: RequestListItem; types: RequestType[]; href: string | null }) {
-  const t = typeOf(types, r.type_id, r.kind);
-  const text = `${t.icon} ${t.name}`;
-  return href ? <Link href={href} className="label label-outing">{text}</Link> : <span className="label label-outing">{text}</span>;
 }
 
 /** 紐づいた稟議 (分岐元・分岐先) の折りたたみ。紐づいた稟議がない行には出さない */
@@ -177,7 +163,7 @@ function LinkedRow({ x, types }: { x: LinkedRequest; types: RequestType[] }) {
         <Octicon name={statusIcon(x.status)} size={12} />
       </span>
       <Link href={`/requests/${x.id}`}>{typeOf(types, x.type_id, x.kind).icon} {x.title}</Link>
-      <span className="muted">#{shortId(x.id)} · {x.requester_name} · {statusLabel(x.kind, x.status)} · {money(x.actual_price ?? x.price, x.currency)}</span>
+      <span className="muted">{x.requester_name} · {statusLabel(x.kind, x.status)} · {money(x.actual_price ?? x.price, x.currency)}</span>
     </div>
   );
 }

@@ -25,16 +25,6 @@ export default async function DashboardPage() {
   return (
     <div>
       <h1>ダッシュボード <span className="ja">家庭内の購入状況</span></h1>
-      <div className="stats">
-        <Stat k="自分の番" v={d.my_turn} href="/requests?filter=my_turn" />
-        <Stat k="相手の番" v={d.their_turn} href="/requests?filter=their_turn" />
-        <Stat k="稟議の数" v={d.total_requests} href="/requests?filter=all" />
-        <Stat k="レビュー待ち" v={d.waiting_for_review} href="/requests?filter=waiting" />
-        <Stat k="自分のレビュー待ち" v={d.waiting_for_my_review} href="/requests?filter=to_review" />
-        <Stat k="承認済み (購入前)" v={d.approved} href="/requests?filter=approved" />
-        <Stat k="完了 (購入・お出かけ)" v={d.purchased} href="/requests?filter=purchased" />
-        <Stat k="支出の合計" v={money(d.total_spending, d.currency)} />
-      </div>
 
       <div className="box">
         <div className="box-head">
@@ -52,6 +42,17 @@ export default async function DashboardPage() {
             </div>
           ))
         )}
+      </div>
+
+      <div className="stats">
+        <Stat k="自分の番" v={d.my_turn} href="/requests?filter=my_turn" />
+        <Stat k="相手の番" v={d.their_turn} href="/requests?filter=their_turn" />
+        <Stat k="稟議の数" v={d.total_requests} href="/requests?filter=all" />
+        <Stat k="レビュー待ち" v={d.waiting_for_review} href="/requests?filter=waiting" />
+        <Stat k="自分のレビュー待ち" v={d.waiting_for_my_review} href="/requests?filter=to_review" />
+        <Stat k="承認済み (購入前)" v={d.approved} href="/requests?filter=approved" />
+        <Stat k="完了 (購入・お出かけ)" v={d.purchased} href="/requests?filter=purchased" />
+        <Stat k="支出の合計" v={money(d.total_spending, d.currency)} />
       </div>
 
       <div className="box">
