@@ -67,7 +67,12 @@ export default async function RequestsPage({ searchParams }: { searchParams: { f
         <div className="box-head list-filters">
           <nav className="filters" aria-label="状態で絞り込み">
             {FILTERS.map((f) => (
-              <Link key={f.key} href={href(f.key, kind)} className={f.key === filter ? 'on' : ''} aria-current={f.key === filter ? 'page' : undefined}>
+              <Link
+                key={f.key}
+                href={href(f.key, kind)}
+                className={[f.key === filter && 'on', f.tone && `toned tone-${f.tone}`].filter(Boolean).join(' ')}
+                aria-current={f.key === filter ? 'page' : undefined}
+              >
                 {f.label}
                 <span className="counter">{counts[f.key]}</span>
               </Link>

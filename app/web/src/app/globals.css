@@ -41,6 +41,8 @@
   --danger-border: #ff818266;
   --severe: #bc4c00;
   --severe-subtle: #fff1e5;
+  --sponsors: #bf3989;
+  --sponsors-subtle: #ffeff7;
   --neutral-subtle: #eff2f5;
   --diff-del-bg: #ffebe9;
   --diff-del-fg: #82071e;
@@ -103,6 +105,8 @@
   --danger-border: #f8514966;
   --severe: #db6d28;
   --severe-subtle: #db6d281a;
+  --sponsors: #db61a2;
+  --sponsors-subtle: #db61a21a;
   --neutral-subtle: #262c36;
   --diff-del-bg: #f8514926;
   --diff-del-fg: #ff7b72;
@@ -164,6 +168,8 @@
     --danger-border: #f8514966;
     --severe: #db6d28;
     --severe-subtle: #db6d281a;
+    --sponsors: #db61a2;
+    --sponsors-subtle: #db61a21a;
     --neutral-subtle: #262c36;
     --diff-del-bg: #f8514926;
     --diff-del-fg: #ff7b72;
@@ -327,6 +333,18 @@ input[type=checkbox], input[type=radio] { width: auto; min-height: 0; box-shadow
 .list-filters .filters .counter { margin-left: 2px; }
 .list-filters .filters > span:last-child { margin-left: auto; }
 .list-filters .filters a.on .counter { background: var(--fg); color: var(--bg); }
+/* 状態のタブの色分け (FILTERS の tone)。色の点と件数に、その色を付ける */
+.tone-yellow { --tone: var(--attention); --tone-subtle: var(--attention-subtle); }
+.tone-gray { --tone: var(--muted); --tone-subtle: var(--neutral-subtle); }
+.tone-green { --tone: var(--open-fg); --tone-subtle: var(--open-subtle); }
+.tone-orange { --tone: var(--severe); --tone-subtle: var(--severe-subtle); }
+.tone-pink { --tone: var(--sponsors); --tone-subtle: var(--sponsors-subtle); }
+.tone-purple { --tone: var(--done); --tone-subtle: var(--done-subtle); }
+.tone-blue { --tone: var(--accent); --tone-subtle: var(--accent-subtle); }
+.tone-red { --tone: var(--danger); --tone-subtle: var(--danger-subtle); }
+.filters a.toned::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 999px; background: var(--tone); }
+.list-filters .filters a.toned .counter { background: var(--tone-subtle); color: var(--tone); }
+.list-filters .filters a.toned.on .counter { background: var(--tone); color: var(--bg); }
 .req-side { display: flex; align-items: center; gap: 16px; white-space: nowrap; color: var(--muted); font-size: 12px; }
 .req-price { font-weight: 600; font-size: 14px; color: var(--fg); font-variant-numeric: tabular-nums; }
 .empty { padding: 48px 16px; text-align: center; color: var(--muted); }
@@ -461,6 +479,9 @@ dialog::backdrop { background: var(--backdrop); }
 .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 16px; }
 .stat .k { color: var(--muted); font-size: 12px; }
 .stat .v { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* 件数カードも、一覧の状態のタブと同じ色 (.tone-*) にする。左の線と、見出しの前の色の点 */
+.stat.toned { border-left: 3px solid var(--tone); }
+.stat.toned .k::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: var(--tone); margin-right: 6px; }
 .bar { height: 8px; border-radius: 999px; background: var(--neutral-subtle); overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--open); border-radius: 999px; }
 

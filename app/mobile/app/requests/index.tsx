@@ -3,7 +3,7 @@ import { Alert, FlatList, Image, Pressable, RefreshControl, ScrollView, Text, Vi
 import { router, useFocusEffect } from 'expo-router';
 import { apiFetch, clearToken, getToken, linkPreviewUrl } from '@/api';
 import { money, timeAgo } from '@/format';
-import { Button, C, s, StatusBadge, statusColor } from '@/components/ui';
+import { Button, C, s, StatusBadge, statusColor, toneColor } from '@/components/ui';
 import { NotificationButton } from '@/components/NotificationButton';
 import { DEFAULT_FILTER, FILTERS, statusLabel, typeOf, type FilterKey, type LinkedRequest, type Me, type RequestCounts, type RequestListItem, type RequestType } from '@/types';
 import { useTheme } from '@/theme';
@@ -95,9 +95,14 @@ export default function RequestsScreen() {
           {FILTERS.map((f) => {
             const on = f.key === filter;
             const label = counts ? `${f.label}（${counts[f.key]}）` : f.label;
+            // 状態ごとの色。選んでいるタブはその色で塗り、ほかは色の点を付ける (「すべて」は色なし)
+            const tone = f.tone ? toneColor(f.tone) : C.fg;
             return (
-              <Pressable key={f.key} onPress={() => setFilter(f.key)} style={[s.chip, on && { backgroundColor: C.fg, borderColor: C.fg }]}>
-                <Text style={[s.chipText, on && { color: C.card, fontWeight: '600' }]}>{label}</Text>
+              <Pressable key={f.key} onPress={() => setFilter(f.key)} style={[s.chip, on && { backgroundColor: tone, borderColor: tone }]}>
+                <Text style={[s.chipText, on && { color: C.card, fontWeight: '600' }]}>
+                  {f.tone && !on && <Text style={{ color: tone }}>● </Text>}
+                  {label}
+                </Text>
               </Pressable>
             );
           })}
