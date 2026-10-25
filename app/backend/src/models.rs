@@ -746,8 +746,10 @@ pub struct PurchaseInput {
 
 #[derive(Debug, Default, Deserialize)]
 pub struct ListQuery {
-    /// all / my_turn / their_turn / waiting / to_review / mine / approved / purchased / closed
+    /// 段: all / waiting / to_review / mine / approved / purchased / closed (以前の my_turn / their_turn は番として読む)
     pub filter: Option<String>,
+    /// 番: all / my_turn / their_turn (段と掛け合わせる)
+    pub turn: Option<String>,
     /// 型で絞り込む (省略時はすべて)
     pub kind: Option<RequestKind>,
     /// 種類で絞り込む
@@ -757,18 +759,31 @@ pub struct ListQuery {
     pub label: Option<Uuid>,
 }
 
-/// 一覧のフィルターごとの件数 (種類・ラベルの絞り込みは反映する)
-#[derive(Debug, Serialize, sqlx::FromRow)]
+/// 一覧のタブの件数。段のタブは選んでいる番を、番のタブは選んでいる段を反映する (どちらも種類・ラベルの絞り込みは反映する)
+#[derive(Debug, Serialize)]
 pub struct RequestCounts {
-    pub my_turn: i64,
-    pub their_turn: i64,
+    pub status: StatusCounts,
+    pub turn: TurnCounts,
+}
+
+/// 段ごとの件数。all は全段
+#[derive(Debug, Serialize)]
+pub struct StatusCounts {
+    pub all: i64,
     pub waiting: i64,
     pub to_review: i64,
     pub mine: i64,
     pub approved: i64,
     pub purchased: i64,
     pub closed: i64,
+}
+
+/// 番ごとの件数。all は番で絞り込まない件数
+#[derive(Debug, Serialize)]
+pub struct TurnCounts {
     pub all: i64,
+    pub my_turn: i64,
+    pub their_turn: i64,
 }
 
 /// ラベル別の支出。label が None なら「ラベルなし」

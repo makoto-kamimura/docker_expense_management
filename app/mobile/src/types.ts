@@ -591,33 +591,48 @@ export const DECISION_LABEL: Record<ReviewerDecision, string> = {
 export type FilterTone = 'yellow' | 'gray' | 'green' | 'orange' | 'pink' | 'purple' | 'blue' | 'red';
 
 /**
- * 一覧のフィルター (並びはタブの順。「すべて」は最後)。tone はタブの色で、状態のバッジと同じ色にそろえる
- * (レビュー待ち = 緑、承認済み = マージの紫、完了 = 青、クローズ = 赤)。自分の番は「あなたの番」の印と同じ黄
+ * 一覧の段のタブ (並びはタブの順)。tone はタブの色で、状態のバッジと同じ色にそろえる
+ * (レビュー待ち = 緑、承認済み = マージの紫、完了 = 青、クローズ = 赤)
  */
-export const FILTERS = [
-  { key: 'my_turn', label: '自分の番', tone: 'yellow' },
-  { key: 'their_turn', label: '相手の番', tone: 'gray' },
+export const STATUS_FILTERS = [
   { key: 'waiting', label: 'レビュー待ち', tone: 'green' },
   { key: 'to_review', label: '自分のレビュー待ち', tone: 'orange' },
   { key: 'mine', label: '自分の申請', tone: 'pink' },
   { key: 'approved', label: '承認済み', tone: 'purple' },
   { key: 'purchased', label: '完了', tone: 'blue' },
   { key: 'closed', label: 'クローズ', tone: 'red' },
-  { key: 'all', label: 'すべて', tone: null },
-] as const satisfies readonly { key: string; label: string; tone: FilterTone | null }[];
-export type FilterKey = (typeof FILTERS)[number]['key'];
-/** 状態のタブのうち、段に分けずに上に出すもの */
-export const FILTER_TOP: FilterKey[] = ['my_turn', 'their_turn', 'all'];
-/** ほかの状態のタブは、詳細の3段の流れ (申請 → 承認 → 実行) と同じ段に分けて並べる */
-export const FILTER_STEPS: { title: string; keys: FilterKey[] }[] = [
+] as const satisfies readonly { key: string; label: string; tone: FilterTone }[];
+export type StatusFilterKey = (typeof STATUS_FILTERS)[number]['key'];
+/** 段のタブは、詳細の3段の流れ (申請 → 承認 → 実行) と同じ段に分けて並べる */
+export const FILTER_STEPS: { title: string; keys: StatusFilterKey[] }[] = [
   { title: '申請', keys: ['mine'] },
   { title: '承認', keys: ['waiting', 'to_review', 'approved'] },
   { title: '実行', keys: ['purchased', 'closed'] },
 ];
-/** 一覧を開いたときのフィルター */
-export const DEFAULT_FILTER: FilterKey = 'waiting';
-/** フィルターごとの件数 (GET /requests/counts。種類・ラベルの絞り込みは反映する) */
-export type RequestCounts = Record<FilterKey, number>;
+/**
+ * 一覧の番の絞り込み。段のタブと掛け合わせる (段を選んでいなければ全段)。
+ * 自分の番は「あなたの番」の印と同じ黄
+ */
+export const TURN_FILTERS = [
+  { key: 'my_turn', label: '自分の番', tone: 'yellow' },
+  { key: 'their_turn', label: '相手の番', tone: 'gray' },
+  { key: 'all', label: 'すべて', tone: null },
+] as const satisfies readonly { key: string; label: string; tone: FilterTone | null }[];
+export type TurnKey = (typeof TURN_FILTERS)[number]['key'];
+/** 稟議の一覧を開いたときの番 (段は選ばない = 全段の自分の番) */
+export const DEFAULT_TURN: TurnKey = 'my_turn';
+/** 段のタブ・番の絞り込みの色 (「すべて」は色なし) */
+export function filterTone(key: StatusFilterKey | TurnKey): FilterTone | null {
+  return [...STATUS_FILTERS, ...TURN_FILTERS].find((f) => f.key === key)?.tone ?? null;
+}
+/**
+ * 一覧のタブの件数 (GET /requests/counts)。段のタブ (status) は選んでいる番を、番の絞り込み (turn) は選んでいる段を反映する。
+ * 種類・ラベルの絞り込みはどちらにも反映する。status.all は全段
+ */
+export interface RequestCounts {
+  status: Record<StatusFilterKey | 'all', number>;
+  turn: Record<TurnKey, number>;
+}
 
 // ---------------------------------------------------------------------------
 // 家事のコミット

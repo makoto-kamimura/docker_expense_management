@@ -1,26 +1,15 @@
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { requireUser } from '@/lib/session';
-import { money, timeAgo } from '@/lib/format';
-import { FILTERS, type ChoresResp, type Dashboard, type FilterKey, type FilterTone, type RequestListItem } from '@/lib/types';
+import { money } from '@/lib/format';
+import { filterTone, type ChoresResp, type Dashboard, type FilterTone } from '@/lib/types';
 import LabelChip from '@/components/LabelChip';
-import StatusBadge from '@/components/StatusBadge';
 import ChoreBadges from '@/components/ChoreBadges';
 import ContributionGraph from '@/components/ContributionGraph';
 
-/** 「あなたの対応が必要な稟議」に出す件数 */
-const MY_TURN_LIMIT = 5;
-
-/** 件数カードの色。一覧の状態のタブと同じ色にする */
-const toneOf = (key: FilterKey) => FILTERS.find((f) => f.key === key)?.tone ?? null;
-
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [d, chores, myTurn] = await Promise.all([
-    apiFetch<Dashboard>('/dashboard'),
-    apiFetch<ChoresResp>('/chores'),
-    apiFetch<RequestListItem[]>('/requests?filter=my_turn'),
-  ]);
+  const [d, chores] = await Promise.all([apiFetch<Dashboard>('/dashboard'), apiFetch<ChoresResp>('/chores')]);
   const max = Math.max(1, ...d.by_label.map((c) => c.total));
   const me = chores.me;
   const choreMax = Math.max(1, ...me.by_chore.map((c) => c.days));
@@ -29,33 +18,15 @@ export default async function DashboardPage() {
     <div>
       <h1>ダッシュボード <span className="ja">家庭内の購入状況</span></h1>
 
-      <div className="box">
-        <div className="box-head">
-          <h2>あなたの対応が必要な稟議 <span className="ja">ボールを持っている稟議</span></h2>
-          {myTurn.length > MY_TURN_LIMIT && <Link href="/requests?filter=my_turn" className="small">すべて見る ({myTurn.length}件)</Link>}
-        </div>
-        {myTurn.length === 0 ? (
-          <div className="box-body"><p className="muted" style={{ margin: 0 }}>今あなたが対応する稟議はありません 🥳</p></div>
-        ) : (
-          myTurn.slice(0, MY_TURN_LIMIT).map((r) => (
-            <div key={r.id} className="box-row" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <StatusBadge status={r.status} kind={r.kind} small viewer={r.viewer_role} />
-              <Link href={`/requests/${r.id}`} style={{ fontWeight: 600 }}>{r.title}</Link>
-              <span className="muted small" style={{ marginLeft: 'auto' }}>{r.requester_name} の申請 · {timeAgo(r.updated_at)}に更新</span>
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="stats">
-        <Stat k="自分の番" v={d.my_turn} href="/requests?filter=my_turn" tone={toneOf('my_turn')} />
-        <Stat k="相手の番" v={d.their_turn} href="/requests?filter=their_turn" tone={toneOf('their_turn')} />
-        <Stat k="稟議の数" v={d.total_requests} href="/requests?filter=all" />
-        <Stat k="レビュー待ち" v={d.waiting_for_review} href="/requests?filter=waiting" tone={toneOf('waiting')} />
-        <Stat k="自分のレビュー待ち" v={d.waiting_for_my_review} href="/requests?filter=to_review" tone={toneOf('to_review')} />
-        <Stat k="承認済み (購入前)" v={d.approved} href="/requests?filter=approved" tone={toneOf('approved')} />
-        <Stat k="完了 (購入・お出かけ)" v={d.purchased} href="/requests?filter=purchased" tone={toneOf('purchased')} />
-        <Stat k="支出の合計" v={money(d.total_spending, d.currency)} />
+      {/* 稟議の件数 (横一列)。自分の番の稟議の一覧は、稟議タブを開いたときに出る */}
+      <div className="stats stats-row">
+        <Stat k="自分の番" v={d.my_turn} href="/requests" tone={filterTone('my_turn')} />
+        <Stat k="相手の番" v={d.their_turn} href="/requests?turn=their_turn" tone={filterTone('their_turn')} />
+        <Stat k="稟議の数" v={d.total_requests} href="/requests?turn=all" />
+        <Stat k="レビュー待ち" v={d.waiting_for_review} href="/requests?filter=waiting&turn=all" tone={filterTone('waiting')} />
+        <Stat k="自分のレビュー待ち" v={d.waiting_for_my_review} href="/requests?filter=to_review&turn=all" tone={filterTone('to_review')} />
+        <Stat k="承認済み (購入前)" v={d.approved} href="/requests?filter=approved&turn=all" tone={filterTone('approved')} />
+        <Stat k="完了 (購入・お出かけ)" v={d.purchased} href="/requests?filter=purchased&turn=all" tone={filterTone('purchased')} />
       </div>
 
       <div className="box">
@@ -114,7 +85,7 @@ export default async function DashboardPage() {
                 {d.by_label.map((c) => (
                   <tr key={c.label?.id ?? 'none'}>
                     <td style={{ width: 160 }}>
-                      {c.label ? <LabelChip label={c.label} href={`/requests?filter=all&label=${c.label.id}`} /> : <span className="muted">ラベルなし</span>}
+                      {c.label ? <LabelChip label={c.label} href={`/requests?turn=all&label=${c.label.id}`} /> : <span className="muted">ラベルなし</span>}
                     </td>
                     <td>
                       <div className="bar" role="img" aria-label={`${Math.round((c.total / max) * 100)}%`}>
