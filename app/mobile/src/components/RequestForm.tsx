@@ -349,9 +349,9 @@ export default function RequestForm({
       </Card>
 
       <View style={{ gap: 8 }}>
-        <Button title="レビューを依頼する" variant="primary" onPress={() => save(true)} disabled={!title.trim() || !!busy} busy={busy === 'submit'} />
+        <Button title="プッシュ&プルリクエスト(レビュー依頼)" variant="primary" onPress={() => save(true)} disabled={!title.trim() || !!busy} busy={busy === 'submit'} />
         {missing.length > 0 && <Text style={s.muted}>レビューを依頼するには: {missing.join('、')} を入力してください</Text>}
-        <Button title="下書き保存" onPress={() => save(false)} disabled={!title.trim() || !!busy} busy={busy === 'save'} />
+        <Button title="コミット(下書き保存)" onPress={() => save(false)} disabled={!title.trim() || !!busy} busy={busy === 'save'} />
       </View>
     </ScrollView>
   );

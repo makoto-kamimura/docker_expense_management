@@ -23,7 +23,7 @@ export default async function EditRequestPage({ params }: { params: { id: string
     <div style={{ maxWidth: 860 }}>
       <h1>稟議の編集</h1>
       {r.status === 'changes_needed' && (
-        <div className="notice">コメントをもとに内容を更新し、<strong>レビューを依頼する</strong>を押してください。</div>
+        <div className="notice">コメントをもとに内容を更新し、<strong>プッシュ&プルリクエスト(レビュー依頼)</strong>を押してください。</div>
       )}
       <RequestForm
         action={saveRequestAction.bind(null, r.id)}

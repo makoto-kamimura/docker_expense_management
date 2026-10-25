@@ -284,7 +284,7 @@ export default function RequestDetailScreen() {
               <Text style={{ fontWeight: '700' }}>この稟議は下書きです</Text>
               {p.can_edit && <Button title="編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
               {p.can_submit ? (
-                <Button title="レビューを依頼する" variant="primary" busy={busy} onPress={() => run('submit')} />
+                <Button title="プッシュ&プルリクエスト(レビュー依頼)" variant="primary" busy={busy} onPress={() => run('submit')} />
               ) : p.can_edit ? (
                 // レビュアーがまだいないときは、ボタンの代わりに編集画面へ案内する
                 <>
@@ -301,12 +301,12 @@ export default function RequestDetailScreen() {
                 <Text style={{ fontWeight: '700' }}>あなたのレビューが依頼されています</Text>
                 <Text style={s.ja}>金額・理由・リンク・資料を確認してください。</Text>
                 <TextInput style={[s.input, s.multi]} multiline value={comment} onChangeText={setComment} placeholder="コメント (再確認を依頼するときは必須)" />
-                <Button title="承認する" variant="primary" busy={busy} onPress={() =>
+                <Button title="アプルーブ(承認)" variant="primary" busy={busy} onPress={() =>
                   confirm(
                     'この稟議を承認しますか？',
                     `${t.thing}の稟議を承認します。\n\n${t.priceShort}\n${price}` +
                       (r.approval_tasks ? `\n\n承認したら、次のことをお願いされています:\n${r.approval_tasks}` : ''),
-                    '承認する',
+                    'アプルーブ(承認)',
                     () => run('approve', true),
                   )} />
                 <Button title="再確認を依頼" disabled={!comment.trim()} onPress={() => run('request-changes', true)} />
@@ -329,7 +329,7 @@ export default function RequestDetailScreen() {
               </Text>
               {r.requester_id === me.id && <Text style={s.muted}>コメントを確認して内容を更新し、再申請してください。</Text>}
               {p.can_edit && <Button title="稟議を編集" onPress={() => router.push(`/requests/edit/${r.id}`)} />}
-              {p.can_submit && <Button title="再度レビューを依頼" variant="primary" busy={busy} onPress={() => run('submit')} />}
+              {p.can_submit && <Button title="再プッシュ(再レビュー依頼)" variant="primary" busy={busy} onPress={() => run('submit')} />}
               {p.can_close && <Button title="取り下げ" variant="danger" onPress={withdraw} />}
               {p.can_reject && <Button title="却下" variant="danger" onPress={reject} />}
             </>
@@ -344,8 +344,8 @@ export default function RequestDetailScreen() {
                 そのあとは{actor.id === me.id ? 'あなた' : ` ${actor.name} `}の番です ({t.actVerb})。
               </Text>
               {p.can_merge ? (
-                <Button title="マージする" variant="merge" busy={busy} onPress={() =>
-                  confirm('この稟議をマージしますか？', `グループが${t.thing}に合意したことを確定します。`, 'マージする', () => run('merge'))} />
+                <Button title="マージ(稟議成立)" variant="merge" busy={busy} onPress={() =>
+                  confirm('この稟議をマージしますか？', `グループが${t.thing}に合意したことを確定します。`, 'マージ(稟議成立)', () => run('merge'))} />
               ) : (
                 <Text style={s.muted}>マージできるのは申請者かレビュアーです。</Text>
               )}

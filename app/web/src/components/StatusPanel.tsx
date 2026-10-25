@@ -81,7 +81,7 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
         {p.can_edit && !p.can_submit && <p className="muted">レビューを依頼するには、レビュアーを1人以上選んでください。</p>}
         <div className="actions">
           {p.can_edit && <Link className="btn" href={`/requests/${r.id}/edit`}>編集</Link>}
-          {p.can_submit && <button className="btn-primary" disabled={pending} onClick={() => run('submit')}>レビューを依頼する</button>}
+          {p.can_submit && <button className="btn-primary" disabled={pending} onClick={() => run('submit')}>プッシュ&プルリクエスト(レビュー依頼)</button>}
           {/* レビュアーがまだいないときは、ボタンの代わりに編集画面へ案内する */}
           {p.can_edit && !p.can_submit && <Link className="btn btn-primary" href={`/requests/${r.id}/edit`}>レビュアーを選んで依頼する</Link>}
         </div>
@@ -107,10 +107,10 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
               再確認を依頼
             </button>
             <ConfirmButton
-              label="承認する"
+              label="アプルーブ(承認)"
               className="btn-primary"
               title="この稟議を承認しますか？"
-              confirmLabel="承認する"
+              confirmLabel="アプルーブ(承認)"
               confirmClassName="btn-primary"
               disabled={pending}
               onConfirm={() => run('approve', true)}
@@ -150,7 +150,7 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
         {errorBox}
         <div className="actions">
           {p.can_edit && <Link className="btn" href={`/requests/${r.id}/edit`}>稟議を編集</Link>}
-          {p.can_submit && <button className="btn-primary" disabled={pending} onClick={() => run('submit')}>再度レビューを依頼</button>}
+          {p.can_submit && <button className="btn-primary" disabled={pending} onClick={() => run('submit')}>再プッシュ(再レビュー依頼)</button>}
           {p.can_close && <WithdrawButton pending={pending} onWithdraw={() => run('close')} />}
           {p.can_reject && <RejectButton pending={pending} onReject={() => run('reject')} />}
           {!isRequester && !p.can_reject && <span className="muted">申請者の再確認を待っています。</span>}
@@ -176,10 +176,10 @@ export default function StatusPanel({ detail, meId }: { detail: RequestDetail; m
           <div className="actions">
             {p.can_merge ? (
               <ConfirmButton
-                label="マージする"
+                label="マージ(稟議成立)"
                 className="btn-merge"
                 title="この稟議をマージしますか？"
-                confirmLabel="マージする"
+                confirmLabel="マージ(稟議成立)"
                 confirmClassName="btn-merge"
                 disabled={pending}
                 onConfirm={() => run('merge')}
