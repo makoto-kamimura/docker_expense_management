@@ -83,6 +83,24 @@ export async function logoutAction() {
   redirect('/login');
 }
 
+/** 「SSO だけでログインする」を切り替える。失敗したら設定画面に理由を出す */
+export async function setSsoOnlyAction(formData: FormData) {
+  const enabled = formData.get('enabled') === 'true';
+  try {
+    await apiFetch('/me/sso-only', { method: 'PUT', body: JSON.stringify({ enabled }) });
+  } catch (e) {
+    redirect(`/settings?sso_only_error=${encodeURIComponent((e as Error).message)}#sso`);
+  }
+  revalidatePath('/settings');
+  redirect('/settings#sso');
+}
+
+/** SSO の連携を解除する (パスワードでのログインはそのまま使える。「SSO だけ」も外れる) */
+export async function unlinkSsoAction() {
+  await apiFetch('/me/identities/sso', { method: 'DELETE' });
+  revalidatePath('/settings');
+}
+
 export async function completeOnboardingAction(next: string) {
   await apiFetch('/me/onboarded', { method: 'POST', body: '{}' });
   revalidatePath('/', 'layout');
