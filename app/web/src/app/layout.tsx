@@ -45,7 +45,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="header-inner" style={user ? undefined : { paddingBottom: 16 }}>
             <div className="header-top">
               <a href="/" className="brand" aria-label="RingiWoMerge ホーム">
-                <span className="brand-mark"><Octicon name="merge" /></span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo.svg" alt="" width={32} height={32} style={{ display: 'block' }} />
               </a>
               <div className="crumbs">
                 {user && (
