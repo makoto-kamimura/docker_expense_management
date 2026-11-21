@@ -3,7 +3,10 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::{
-    auth::{bearer_claims, hash_password, issue_token, load_member, verify_password, AuthUser},
+    auth::{
+        bearer_claims, hash_password, issue_token, load_member, login_method_allowed, sso_only_enforced,
+        verify_password, AuthUser, LOGIN_PASSWORD,
+    },
     error::{ApiError, ApiResult},
     handlers::{
         chores,
@@ -88,7 +91,7 @@ pub async fn register(
 
     let user = load_member(&state, user_id).await?.ok_or(ApiError::NotFound)?;
     Ok(Json(AuthResp {
-        token: issue_token(&state.config.jwt_secret, user_id, Utc::now().timestamp())?,
+        token: issue_token(&state.config.jwt_secret, user_id, Utc::now().timestamp(), LOGIN_PASSWORD)?,
         user,
     }))
 }
@@ -110,8 +113,13 @@ pub async fn login(
     }
     // 家族に所属していないユーザーはログインさせない
     let member = load_member(&state, user.id).await?.ok_or(ApiError::Unauthorized)?;
+    // 「SSO だけ」にした人は、パスワードが正しくても SSO へ案内する
+    // (パスワードを確かめたあとに判定するので、パスワードを知らない人には設定が分からない)
+    if !login_method_allowed(member.sso_only, LOGIN_PASSWORD, sso_only_enforced(&state)) {
+        return Err(ApiError::SsoRequired);
+    }
     Ok(Json(AuthResp {
-        token: issue_token(&state.config.jwt_secret, user.id, Utc::now().timestamp())?,
+        token: issue_token(&state.config.jwt_secret, user.id, Utc::now().timestamp(), LOGIN_PASSWORD)?,
         user: member,
     }))
 }
@@ -120,10 +128,14 @@ pub async fn login(
 pub async fn refresh(State(state): State<AppState>, headers: HeaderMap) -> ApiResult<Json<AuthResp>> {
     let claims = bearer_claims(&headers, &state)?;
     let member = load_member(&state, claims.sub).await?.ok_or(ApiError::Unauthorized)?;
+    // 「SSO だけ」にした人の、パスワードで入ったトークンは延ばさない
+    if !login_method_allowed(member.sso_only, claims.login_method(), sso_only_enforced(&state)) {
+        return Err(ApiError::Unauthorized);
+    }
     // 以前の (ログインした時刻を持たない) トークンは、今ログインしたものとして扱う
     let auth_time = if claims.auth_time > 0 { claims.auth_time } else { Utc::now().timestamp() };
     Ok(Json(AuthResp {
-        token: issue_token(&state.config.jwt_secret, member.id, auth_time)?,
+        token: issue_token(&state.config.jwt_secret, member.id, auth_time, claims.login_method())?,
         user: member,
     }))
 }
@@ -139,10 +151,13 @@ async fn me_resp(state: &AppState, me: Member) -> ApiResult<MeResp> {
             .fetch_one(&state.db)
             .await?;
     let family = family_info(state, &me).await?;
+    let (sso_only, login_method) = (me.sso_only, me.login_method.clone());
     Ok(MeResp {
         member: me,
         family,
         onboarded,
+        sso_only,
+        login_method,
     })
 }
 

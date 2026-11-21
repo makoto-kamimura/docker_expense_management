@@ -1476,6 +1476,8 @@ mod tests {
             can_request: true,
             can_review: true,
             is_admin,
+            sso_only: false,
+            login_method: String::new(),
         }
     }
 

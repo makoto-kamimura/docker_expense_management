@@ -218,7 +218,6 @@ p { margin: 0 0 8px; }
 .header-top { display: flex; align-items: center; gap: 12px; min-height: 32px; }
 .brand { color: var(--fg); font-size: 14px; display: flex; align-items: center; gap: 8px; min-width: 0; }
 .brand:hover { text-decoration: none; }
-.brand-mark { width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); display: inline-flex; align-items: center; justify-content: center; color: var(--fg); flex: none; }
 .crumbs { display: flex; align-items: center; gap: 4px; font-size: 14px; min-width: 0; flex-wrap: wrap; }
 .crumbs .sep { color: var(--muted); }
 .crumbs strong { font-weight: 600; }

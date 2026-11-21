@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS users (
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url   TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
+-- 「SSO だけでログインする」(本人が設定画面で選ぶ。SSO の連携を解除すると FALSE に戻す)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_only BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- 1 ユーザーは 1 家族に所属する (将来の複数所属に備えて中間テーブルにしている)
 CREATE TABLE IF NOT EXISTS family_members (
@@ -365,6 +367,40 @@ CREATE TABLE IF NOT EXISTS server_keys (
     value      TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- SSO (OpenID Connect) の連携。利用者の特定には認証サーバーの不変の ID (sub) だけを使い、メールアドレスは表示用
+CREATE TABLE IF NOT EXISTS user_identities (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider      TEXT NOT NULL,
+    subject       TEXT NOT NULL,
+    email         TEXT,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_login_at TIMESTAMPTZ,
+    UNIQUE (provider, subject),
+    UNIQUE (user_id, provider)
+);
+
+-- SSO の途中の状態。どのトークンもハッシュで持ち、1 回使ったら消す
+--   連携: intent (ログイン中に発行) → state (認証サーバーへ) → result (アプリへ) の順に進む
+--   ログイン: state → result
+CREATE TABLE IF NOT EXISTS oauth_flows (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    mode             TEXT NOT NULL CHECK (mode IN ('login', 'link')),
+    user_id          UUID REFERENCES users(id) ON DELETE CASCADE,
+    intent_hash      TEXT UNIQUE,
+    state_hash       TEXT UNIQUE,
+    nonce            TEXT,
+    server_verifier  TEXT,
+    client_challenge TEXT,
+    return_to        TEXT,
+    result_hash      TEXT UNIQUE,
+    result_subject   TEXT,
+    result_email     TEXT,
+    expires_at       TIMESTAMPTZ NOT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS oauth_flows_expires_idx ON oauth_flows (expires_at);
 
 CREATE OR REPLACE TRIGGER trg_families_updated_at BEFORE UPDATE ON families
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();

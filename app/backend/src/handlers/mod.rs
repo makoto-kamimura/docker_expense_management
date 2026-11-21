@@ -7,6 +7,7 @@ pub mod health;
 pub mod labels;
 pub mod link_previews;
 pub mod notifications;
+pub mod sso;
 pub mod ocr;
 pub mod request_types;
 pub mod requests;

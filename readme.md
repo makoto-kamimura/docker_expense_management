@@ -286,6 +286,12 @@ GitHub の Pull Request の考え方を、家庭内の高額な購入の判断�
 - 表示名は登録したあとも自分で変えられる（Web の設定画面、モバイルの稟議の一覧の「名前を変更」）。変えると、過去の稟議・コメント・履歴の名前も変わる。
 - 1人のユーザーは1つのグループに所属する。
 - ログインは最長30日維持する。14日間使わなければ切れ、使っている間は自動で延びる。
+- **SSO でログイン**（任意。API に `OIDC_ISSUER` などを設定したときだけ表示する）: 共通の認証サーバー（OpenID Connect）のアカウントでログインする。メールアドレスとパスワードでログインしたあと、設定画面（モバイルはアカウントの画面）で自分の SSO のアカウントを連携すると、以後「SSO でログイン」で入れる。認証サーバーの側では、パスワード・パスキー・Google アカウントなどでログインできる。
+  - SSO での新規登録はできない。連携していないアカウントでは入れない（メールアドレスが同じでも自動ではひも付けない）。
+  - 既定では、認証サーバーに 2 段階認証（パスキー）でログインした人だけを通す（`OIDC_REQUIRE_MFA`）。
+  - **SSO だけでログインする**（本人が設定画面で選ぶ）: オンにすると、メールアドレスとパスワードではログインできなくなる。オンにした時点で、パスワードで入っていたほかの端末のログインも切れる。オンにできるのは、連携済みで、いま SSO でログインしている人だけ（SSO で入れることを確かめてから閉じる）。連携を解除すると自動でオフに戻る。
+  - 1人につき SSO のアカウントは1つ。解除しても、パスワードでのログインはそのまま使える。
+  - デモ用のアカウント（`@example.com`）には連携できない。
 
 ### 6.2 オンボーディング
 
@@ -791,7 +797,8 @@ docker_expense_management/
 │   │       ├── seed.rs       デモグループ・サンプルの稟議・家事のコミット
 │   │       ├── previews.rs   リンクプレビューの取得（SSRF 対策）
 │   │       ├── auth.rs       JWT・Argon2id・権限の読み込み
-│   │       └── handlers/     auth / family / requests / labels / attachments / chores / dashboard / link_previews / ocr / health
+│   │       ├── oidc.rs       SSO の部品（設定の公開と公開鍵の取得・ID トークンの署名の確認・PKCE・戻り先の許可）
+│   │       └── handlers/     auth / sso / family / requests / labels / attachments / chores / dashboard / link_previews / ocr / health
 │   ├── web/                  Next.js
 │   │   └── src/{app,components,lib}
 │   └── mobile/               Expo（app/mobile/README.md）
@@ -875,6 +882,48 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
   - モバイル: アプリを開いたときに更新する。
 - `JWT_SECRET` を変えると、発行済みのトークンはすべて無効になる。
 
+### 18.1 SSO（OpenID Connect）
+
+共通の認証サーバー（OpenID Connect プロバイダー。この環境では Rauthy）でのログイン。認証サーバーとの通信（認可コードの交換と ID トークンの確認）は API だけが行い、Web とモバイルで同じ流れを使う。モバイルはアプリ内のブラウザ（`expo-web-browser`）で API の開始 URL を開いて、ディープリンクで戻る。
+
+```
+クライアント                      API                                   認証サーバー
+ code_verifier を作る
+ (連携のときは POST /me/identities/sso/intent で intent を取る)
+ GET /auth/sso/start ──────────▶ state・nonce を作って保存 ─────────▶ ログイン画面
+   ?code_challenge=…                                                     │
+                                  GET /auth/sso/callback ◀─────────────┘
+                                   認可コードを交換し、ID トークンの署名と中身を確認
+                                   (ログインのときは、連携済みのアカウントかも確認)
+ 戻り先 ?code=結果コード ◀──────── 使い捨ての結果コード (60秒)
+ POST /auth/sso/exchange ───────▶ code_verifier を確かめて、
+   { code, code_verifier }         ログイン: JWT を返す / 連携: 本人を確かめて登録
+```
+
+- **接続先は発行元だけで決まる**: エンドポイントと公開鍵は `{OIDC_ISSUER}/.well-known/openid-configuration` から読む（1時間キャッシュ。API の起動時には取りに行かないので、認証サーバーが止まっていてもアプリは動く）。設定の公開の `issuer` が `OIDC_ISSUER` と違うとき、エンドポイントが発行元と別のオリジンのときは使わない。
+- **ID トークンの署名を公開鍵で確かめる**: 認証サーバーの公開鍵（JWKS）で署名を確かめ、`iss`・`aud`・`exp`・`nonce` も確かめる（時計のずれは60秒まで許す）。署名の方式は RS256/384/512・PS256/384/512・ES256・EdDSA だけを許し、共通鍵（HS*）と `none` は許さない。鍵が方式を指定していれば、トークンの方式と一致すること。`aud` が複数なら `azp` がこのクライアントであること。
+- **鍵の入れ替えに追従する**: 知らない `kid` のトークンが来たら、公開鍵を読み直してもう一度確かめる（読み直しは最短10秒おき）。
+- **2段階認証**: `OIDC_REQUIRE_MFA=true`（既定）なら、ID トークンの `amr` に `mfa` がある（パスキーでログインした）ときだけ通す。パスワードだけでログインした人は `?error=mfa_required` で戻す。認証サーバーのクライアントの設定でも、2段階認証を必須にしておく。
+- **PKCE で乗っ取りを防ぐ**: 結果コードは、開始したクライアントが持つ `code_verifier` がないと交換できない。他人に開始 URL や戻り URL を踏ませても、ログインも連携も成立しない。Web は Next.js が `code_verifier` を HttpOnly の Cookie（10分）に持ち、モバイルはメモリに持つ。認証サーバーとの間でも、API が別の PKCE を使う。
+- 利用者の特定には、認証サーバーの不変の ID（ID トークンの `sub`）だけを使う。メールアドレスは表示用に保存するだけ。
+- `state`・`intent`・結果コードは乱数で、DB にはハッシュだけを保存し、1回使ったら消す。
+- **SSO だけでログインする**: 発行する JWT に、ログインした方法（`amr` = `pwd` / `sso`。更新しても変わらない。以前のトークンは `pwd` 扱い）を入れる。`users.sso_only` が真の人は、`POST /auth/login` を（パスワードを確かめたあとに）403 で断り、パスワードで発行したトークンはリクエストのたびに 401 にする（`/auth/refresh` も）。SSO が無効な環境と、非常用の切り替え `OIDC_ALLOW_PASSWORD_FOR_SSO_ONLY=true` のときは守らせない（締め出し防止）。
+- 戻り先は、Web は `{PUBLIC_BASE_URL}/auth/sso/complete` に固定。モバイルは `OIDC_MOBILE_REDIRECT_PREFIXES`（既定 `expense://,exp://`）の先頭一致で確かめる。
+
+**設定**（API の環境変数。`platform/.env.example` を参照）
+
+| 変数 | 内容 |
+|---|---|
+| `OIDC_ISSUER` | 認証サーバーの発行元（例 `https://auth.example.com/auth/v1`）。https のみ（手元の試験だけ `http://localhost`） |
+| `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | 認証サーバーに登録したクライアント（機密クライアント・認可コード + PKCE S256）。`OIDC_ISSUER` を含め、どれかが空なら機能は無効 |
+| `PUBLIC_BASE_URL` | 外から見えるアプリの URL。認証サーバーには `{PUBLIC_BASE_URL}/api/auth/sso/callback` をリダイレクト URI として登録する |
+| `OIDC_REQUIRE_MFA` | `true`（既定）なら 2段階認証でログインした人だけを通す |
+| `OIDC_DISPLAY_NAME` | ボタンなどに出す名前（既定 `SSO`） |
+| `OIDC_SCOPE` | 既定 `openid email profile` |
+| `OIDC_MOBILE_REDIRECT_PREFIXES` | モバイルの戻り先として許す URL の先頭（カンマ区切り） |
+| `OIDC_LINK_DENY_EMAIL_DOMAINS` | 連携させないメールアドレスのドメイン（既定 `example.com` = デモ用アカウント） |
+| `OIDC_ALLOW_PASSWORD_FOR_SSO_ONLY` | 非常用。`true` にすると、「SSO だけ」の人もパスワードでログインできる（認証サーバーが止まったときなど。普段は設定しない） |
+
 ## 19. 機能ごとの実装方針
 
 ### 19.1 スキーマの適用と旧経費精算アプリからの移行
@@ -942,8 +991,10 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 | テーブル | 内容 | 主な列 |
 |---|---|---|
 | `families` | グループ | `name`・`invite_code`（一意）・`currency`（既定 JPY）・`labels_seeded`・`category_labels_migrated` |
-| `users` | ユーザー | `email`（一意）・`password_hash`・`name`・`avatar_url`・`onboarded_at` |
+| `users` | ユーザー | `email`（一意）・`password_hash`・`name`・`avatar_url`・`onboarded_at`・`sso_only`（SSO だけでログインする） |
 | `family_members` | グループへの所属と権限 | `family_id`・`user_id`（一意。1人1グループ）・`can_request`・`can_review`・`is_admin` |
+| `user_identities` | SSO の連携 | `user_id`・`provider`（sso）・`subject`（認証サーバーの `sub`）・`email`（表示用）・`last_login_at`。`(provider, subject)` と `(user_id, provider)` が一意 |
+| `oauth_flows` | SSO の途中の状態 | `mode`（login / link）・`intent_hash`・`state_hash`・`result_hash`（どれもハッシュ）・`client_challenge`（PKCE）・`return_to`・`expires_at`。使ったら消す |
 | `purchase_requests` | 稟議 | `kind`（purchase / outing / activity）・`status`・`title`・`reason`・`price`・`currency`・`seller`・`product_name`・`product_url`・`planned_date`・`end_date`・`notes`・`approval_tasks`（承認したらしてほしいこと）・`assignee_id`（担当者。NULL なら申請者が動く）・`parent_id`（分岐元）・`submitted_at`・`approved_at`・`merged_at`・`merged_by`・`purchased_at`・`purchase_date`・`actual_price`・`order_number`・`final_product_url`・`closed_at`・`close_reason`（rejected / withdrawn）・`category`（使っていない） |
 | `request_reviewers` | 稟議のレビュアーと判定 | `(request_id, user_id)`・`decision`（pending / approved / changes_requested / rejected）・`decided_at` |
 | `alternative_products` | 比較する商品 | `request_id`・`position`・`name`・`price`・`url`・`notes` |
@@ -969,7 +1020,7 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 ## 21. API
 
 - ベースパスは、Nginx 経由では `/api/`、API に直接つなぐときは `/`。
-- `/health`・`/auth/register`・`/auth/login`・`/attachments/:id/raw`（署名で確認）以外は `Authorization: Bearer <JWT>` が必要。
+- `/health`・`/auth/register`・`/auth/login`・`/auth/providers`・`/auth/sso/*`・`/attachments/:id/raw`（署名で確認）以外は `Authorization: Bearer <JWT>` が必要。
 - エラーは `{"error": "..."}` と HTTP ステータス（400 / 401 / 403 / 404 / 409）で返す。
 
 ### 21.1 認証・アカウント
@@ -983,6 +1034,14 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 | GET | `/me` | ログインユーザーと権限 |
 | PUT | `/me` | 自分の表示名の変更 |
 | POST | `/me/onboarded` | オンボーディングの完了 |
+| GET | `/auth/providers` | 使えるログイン方法（`{"sso": true, "sso_name": "SSO"}`） |
+| GET | `/auth/sso/start` | SSO でのログイン / 連携の開始（`mode`・`client`・`code_challenge`・モバイルは `redirect_uri`・連携は `intent`）。認証サーバーへ 303 |
+| GET | `/auth/sso/callback` | 認証サーバーからの戻り。クライアントへ `?code=` か `?error=`（not_linked / mfa_required / cancelled / expired / failed）で 303 |
+| POST | `/auth/sso/exchange` | 結果コードと `code_verifier` の交換。ログインなら JWT、連携なら（Bearer の本人を確かめて）登録 |
+| GET | `/me/identities` | 自分の連携の一覧と、連携できるか |
+| POST | `/me/identities/sso/intent` | 連携の開始に使う、使い捨ての intent |
+| DELETE | `/me/identities/sso` | SSO の連携の解除（「SSO だけ」も外れる） |
+| PUT | `/me/sso-only` | 「SSO だけでログインする」の切り替え（`{"enabled": true}`。オンにするのは、連携済みで SSO でログイン中のときだけ） |
 
 ### 21.2 グループ・メンバー
 
@@ -1139,6 +1198,6 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:8082 npx expo start   # iOS Simulator 
 | Q4 | AI による申請内容の整理 | 要約・足りない情報の指摘をする／しない（現在の仕様） |
 | Q5 | 購入の前後の管理 | 価格の推移・予算・継続費用（サブスクリプション）・保証期間・メンテナンスを管理する |
 | Q6 | 通貨 | グループか稟議ごとに通貨を選ぶ／円のみ（現在の仕様） |
-| Q7 | ログインの方法 | OAuth（Google / Microsoft）・パスワードの再設定を加える／メールとパスワードのみ（現在の仕様） |
+| Q7 | ログインの方法 | パスワードの再設定を加える／メールとパスワードと、任意の SSO（OpenID Connect。[18.1節](#181-ssoopenid-connect)）（現在の仕様） |
 | Q8 | 画面の言語 | 日本語と英語を切り替えられるようにする／日本語のみ（現在の仕様） |
 | Q9 | 複数のグループへの所属 | 1人が複数のグループに入れるようにする（`family_members` は中間テーブルにしてある）／1人1グループ（現在の仕様） |

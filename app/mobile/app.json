@@ -10,10 +10,15 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.example.expense"
+      "package": "com.example.expense",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#f6f8fa"
+      }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router",
@@ -23,7 +28,8 @@
           "cameraPermission": "Take photos of receipts and product documents to attach them to purchase requests.",
           "photosPermission": "Attach photos of receipts and product documents to purchase requests."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "apiUrl": "http://localhost:8080"

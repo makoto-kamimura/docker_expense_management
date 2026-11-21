@@ -10,9 +10,10 @@ import ChoreSettings from './chore-settings';
 import RequestTypeSettings from './request-type-settings';
 import MyName from './my-name';
 import PushToggle from '@/components/PushToggle';
+import SsoLink from './sso-link';
 
 /** Family Settings (readme.md 第7章) */
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: { sso?: string; sso_error?: string; sso_only_error?: string } }) {
   const user = await requireUser();
   const members = await apiFetch<Member[]>('/family/members');
   const chores = user.is_admin ? (await apiFetch<ChoresResp>('/chores')).chores : [];
@@ -43,6 +44,8 @@ export default async function SettingsPage() {
           <PushToggle publicKey={pushKey} />
         </div>
       </div>
+
+      <SsoLink linked={searchParams.sso === 'linked'} error={searchParams.sso_error} ssoOnlyError={searchParams.sso_only_error} />
 
       <div className="box">
         <div className="box-head"><h2>グループの名前</h2></div>
