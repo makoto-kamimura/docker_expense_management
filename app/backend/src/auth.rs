@@ -30,6 +30,25 @@ pub struct Claims {
     /// ログインした時刻。更新しても変わらない (以前のトークンにはないので 0)
     #[serde(default)]
     pub auth_time: i64,
+    /// ログインした方法。`pwd` (メールアドレスとパスワード) か `sso`。更新しても変わらない
+    /// (以前のトークンにはないので空 = パスワードとして扱う)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub amr: String,
+}
+
+/// ログインした方法 (トークンの `amr`)
+pub const LOGIN_PASSWORD: &str = "pwd";
+pub const LOGIN_SSO: &str = "sso";
+
+/// 「SSO だけでログインする」を今の設定で守らせるか。
+/// SSO が無効な環境や、非常用の切り替え (`OIDC_ALLOW_PASSWORD_FOR_SSO_ONLY=true`) のときは守らせない (締め出し防止)
+pub fn sso_only_enforced(state: &AppState) -> bool {
+    state.oidc.is_some() && !state.config.allow_password_for_sso_only
+}
+
+/// この方法でのログインを、この利用者に許すか。「SSO だけ」の人には SSO のログインしか許さない
+pub fn login_method_allowed(sso_only: bool, method: &str, enforced: bool) -> bool {
+    !(enforced && sso_only && method != LOGIN_SSO)
 }
 
 pub fn hash_password(plain: &str) -> Result<String, ApiError> {
@@ -55,13 +74,15 @@ fn token_expiry(now: i64, auth_time: i64) -> Option<i64> {
 }
 
 /// トークンを発行する。ログインのときは `auth_time` に今の時刻を、更新のときは元のトークンの値を渡す。
-pub fn issue_token(secret: &str, user_id: Uuid, auth_time: i64) -> Result<String, ApiError> {
+/// `method` はログインした方法 (`LOGIN_PASSWORD` か `LOGIN_SSO`)。更新のときは元のトークンの値を渡す。
+pub fn issue_token(secret: &str, user_id: Uuid, auth_time: i64, method: &str) -> Result<String, ApiError> {
     let now = Utc::now().timestamp();
     let claims = Claims {
         sub: user_id,
         exp: token_expiry(now, auth_time).ok_or(ApiError::Unauthorized)?,
         iat: now,
         auth_time,
+        amr: method.to_string(),
     };
     Ok(encode(
         &Header::default(),
@@ -71,7 +92,7 @@ pub fn issue_token(secret: &str, user_id: Uuid, auth_time: i64) -> Result<String
 }
 
 pub const MEMBER_SELECT: &str = "SELECT u.id, m.family_id, u.email, u.name, u.avatar_url,
-        m.can_request, m.can_review, m.is_admin
+        m.can_request, m.can_review, m.is_admin, u.sso_only
    FROM users u JOIN family_members m ON m.user_id = u.id";
 
 pub async fn load_member(state: &AppState, user_id: Uuid) -> Result<Option<Member>, ApiError> {
@@ -97,6 +118,17 @@ pub fn bearer_claims(headers: &HeaderMap, state: &AppState) -> Result<Claims, Ap
     Ok(data.claims)
 }
 
+impl Claims {
+    /// ログインした方法。以前のトークン (amr なし) はパスワードとして扱う
+    pub fn login_method(&self) -> &str {
+        if self.amr == LOGIN_SSO {
+            LOGIN_SSO
+        } else {
+            LOGIN_PASSWORD
+        }
+    }
+}
+
 /// ログイン中の家族メンバー
 pub struct AuthUser(pub Member);
 
@@ -106,9 +138,14 @@ impl FromRequestParts<AppState> for AuthUser {
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
         let claims = bearer_claims(&parts.headers, state)?;
-        let member = load_member(state, claims.sub)
+        let mut member = load_member(state, claims.sub)
             .await?
             .ok_or(ApiError::Unauthorized)?;
+        member.login_method = claims.login_method().to_string();
+        // 「SSO だけ」にした人の、パスワードで入ったトークンは使えない (オンにした時点で、ほかの端末のログインも切れる)
+        if !login_method_allowed(member.sso_only, &member.login_method, sso_only_enforced(state)) {
+            return Err(ApiError::Unauthorized);
+        }
         Ok(AuthUser(member))
     }
 }
@@ -138,6 +175,34 @@ mod tests {
     fn expiry_is_capped_by_session_lifetime() {
         // ログインから20日後に更新しても、ログインから30日で切れる
         assert_eq!(token_expiry(20 * DAY, 0), Some(30 * DAY));
+    }
+
+    #[test]
+    fn sso_only_users_need_sso_login() {
+        // 守らせるとき: SSO だけの人は SSO のログインだけ
+        assert!(login_method_allowed(true, LOGIN_SSO, true));
+        assert!(!login_method_allowed(true, LOGIN_PASSWORD, true));
+        assert!(!login_method_allowed(true, "", true));
+        // SSO だけでない人は、どちらでも
+        assert!(login_method_allowed(false, LOGIN_PASSWORD, true));
+        // 守らせないとき (SSO が無効・非常用の切り替え) は、どちらでも
+        assert!(login_method_allowed(true, LOGIN_PASSWORD, false));
+    }
+
+    #[test]
+    fn old_tokens_count_as_password_login() {
+        let claims: Claims = serde_json::from_str(
+            r#"{"sub":"00000000-0000-0000-0000-000000000000","exp":1,"iat":1,"auth_time":1}"#,
+        )
+        .unwrap();
+        assert_eq!(claims.login_method(), LOGIN_PASSWORD);
+    }
+
+    #[test]
+    fn login_method_survives_issue_and_decode() {
+        let token = issue_token("secret", Uuid::nil(), Utc::now().timestamp(), LOGIN_SSO).unwrap();
+        let data = decode::<Claims>(&token, &DecodingKey::from_secret(b"secret"), &Validation::default()).unwrap();
+        assert_eq!(data.claims.login_method(), LOGIN_SSO);
     }
 
     #[test]

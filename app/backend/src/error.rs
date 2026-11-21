@@ -30,6 +30,9 @@ pub enum ApiError {
     Jwt(#[from] jsonwebtoken::errors::Error),
     #[error("password hash error")]
     PasswordHash,
+    /// 「SSO だけでログインする」にした人の、パスワードでのログイン
+    #[error("sso required")]
+    SsoRequired,
 }
 
 impl IntoResponse for ApiError {
@@ -58,6 +61,10 @@ impl IntoResponse for ApiError {
             ApiError::Multipart(e) => (StatusCode::BAD_REQUEST, format!("multipart: {e}")),
             ApiError::Jwt(_) => (StatusCode::UNAUTHORIZED, "ログインが必要です".into()),
             ApiError::PasswordHash => (StatusCode::INTERNAL_SERVER_ERROR, "hash error".into()),
+            ApiError::SsoRequired => (
+                StatusCode::FORBIDDEN,
+                "このアカウントは SSO でのみログインできます。「SSO でログイン」を使ってください".into(),
+            ),
         };
         (status, Json(json!({"error": msg}))).into_response()
     }

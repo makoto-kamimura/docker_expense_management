@@ -118,6 +118,14 @@ pub struct Member {
     pub can_request: bool,
     pub can_review: bool,
     pub is_admin: bool,
+    /// 「SSO だけでログインする」。ほかのメンバーには見せない (本人には MeResp で返す)
+    #[serde(skip_serializing)]
+    #[sqlx(default)]
+    pub sso_only: bool,
+    /// このリクエストのトークンのログイン方法 (`pwd` / `sso`)。DB にはない
+    #[serde(skip_serializing)]
+    #[sqlx(skip)]
+    pub login_method: String,
 }
 
 /// 画面表示用の最小限のユーザー情報
@@ -637,6 +645,10 @@ pub struct MeResp {
     pub family: FamilyInfo,
     /// 初回オンボーディングを見終えたか
     pub onboarded: bool,
+    /// 「SSO だけでログインする」
+    pub sso_only: bool,
+    /// このログインの方法 (`pwd` / `sso`)
+    pub login_method: String,
 }
 
 #[derive(Debug, Deserialize)]

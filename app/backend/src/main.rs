@@ -4,6 +4,7 @@ mod error;
 mod handlers;
 mod migrate;
 mod models;
+mod oidc;
 mod previews;
 mod push;
 mod seed;
@@ -13,7 +14,7 @@ use std::net::SocketAddr;
 
 use axum::{
     extract::DefaultBodyLimit,
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Router,
 };
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -49,6 +50,15 @@ async fn main() -> anyhow::Result<()> {
         .route("/auth/refresh", post(handlers::auth::refresh))
         .route("/me", get(handlers::auth::me).put(handlers::auth::update_me))
         .route("/me/onboarded", post(handlers::auth::complete_onboarding))
+        // SSO (OpenID Connect)。OIDC_ISSUER などが未設定なら 404
+        .route("/auth/providers", get(handlers::sso::providers))
+        .route("/auth/sso/start", get(handlers::sso::start))
+        .route("/auth/sso/callback", get(handlers::sso::callback))
+        .route("/auth/sso/exchange", post(handlers::sso::exchange))
+        .route("/me/identities", get(handlers::sso::identities))
+        .route("/me/identities/sso", delete(handlers::sso::unlink_sso))
+        .route("/me/identities/sso/intent", post(handlers::sso::intent))
+        .route("/me/sso-only", put(handlers::sso::set_sso_only))
         .route("/ocr", post(handlers::ocr::scan))
         .route("/family", get(handlers::family::get).put(handlers::family::update))
         .route("/family/invite-code", post(handlers::family::regenerate_invite_code))

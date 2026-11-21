@@ -35,6 +35,17 @@ services:
       UPLOAD_DIR: /data/uploads
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+      # SSO (OpenID Connect, 任意)。OIDC_ISSUER・OIDC_CLIENT_ID・OIDC_CLIENT_SECRET のどれかが空なら無効
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REQUIRE_MFA: ${OIDC_REQUIRE_MFA:-true}
+      OIDC_DISPLAY_NAME: ${OIDC_DISPLAY_NAME:-SSO}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3100}
+      OIDC_MOBILE_REDIRECT_PREFIXES: ${OIDC_MOBILE_REDIRECT_PREFIXES:-expense://,exp://}
+      OIDC_LINK_DENY_EMAIL_DOMAINS: ${OIDC_LINK_DENY_EMAIL_DOMAINS:-example.com}
+      # 非常用: true にすると「SSO だけ」の人もパスワードでログインできる
+      OIDC_ALLOW_PASSWORD_FOR_SSO_ONLY: ${OIDC_ALLOW_PASSWORD_FOR_SSO_ONLY:-false}
     volumes:
       - backend_uploads:/data/uploads
     ports:
