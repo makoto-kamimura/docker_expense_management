@@ -39,6 +39,7 @@ export default function RootLayout() {
         <Stack.Screen name="notifications" options={{ title: '通知' }} />
         <Stack.Screen name="chores/index" options={{ title: 'マイページ' }} />
         <Stack.Screen name="chores/[id]" options={{ title: 'きれいな状態の見本' }} />
+        <Stack.Screen name="auth/sso" options={{ headerShown: false, animation: 'none' }} />
       </Stack>
     </SafeAreaProvider>
   );

@@ -23,7 +23,8 @@
           "cameraPermission": "Take photos of receipts and product documents to attach them to purchase requests.",
           "photosPermission": "Attach photos of receipts and product documents to purchase requests."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "apiUrl": "http://localhost:8080"

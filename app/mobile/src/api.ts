@@ -21,6 +21,11 @@ function resolveApiUrl(): string {
 
 const API_URL: string = resolveApiUrl();
 
+/** API のベース URL (SSO の開始 URL を組むのに使う) */
+export function apiBaseUrl(): string {
+  return API_URL;
+}
+
 const TOKEN_KEY = 'expense_token';
 
 export async function setToken(token: string) {

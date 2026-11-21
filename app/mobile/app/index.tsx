@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Text, TextInput, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { apiFetch, getToken, setToken } from '@/api';
 import { Button, C, s } from '@/components/ui';
 import type { Me, Member } from '@/types';
 import { useTheme } from '@/theme';
+import { signInWithSso, ssoName } from '@/ssoAuth';
 
 /** ログイン。初回はオンボーディングへ、それ以外はマイページ (家事) へ進む。 */
 export default function LoginScreen() {
@@ -12,11 +13,17 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sso, setSso] = useState<string | null>(null);
+  const [ssoBusy, setSsoBusy] = useState(false);
 
   const next = async () => {
     const me = await apiFetch<Me>('/me');
     router.replace(me.onboarded ? '/chores' : '/onboarding');
   };
+
+  useEffect(() => {
+    ssoName().then(setSso);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -46,9 +53,25 @@ export default function LoginScreen() {
     }
   };
 
+  const onSso = async () => {
+    setSsoBusy(true);
+    try {
+      const res = await signInWithSso('login');
+      if (res?.mode === 'login') {
+        await setToken(res.token);
+        await next();
+      }
+    } catch (e) {
+      Alert.alert('ログインできませんでした', (e as Error).message);
+    } finally {
+      setSsoBusy(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView style={[s.screen, { padding: 24 }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={{ alignItems: 'center', marginVertical: 32 }}>
+        <Image source={require('../assets/logo.png')} style={{ width: 72, height: 72, marginBottom: 12 }} />
         <Text style={{ color: C.muted, fontWeight: '600' }}>稟議をマージ</Text>
         <Text style={{ fontSize: 30, fontWeight: '700', color: C.fg }}>RingiWoMerge</Text>
         <Text style={s.muted}>大きな買い物は、グループのレビューを通してから。</Text>
@@ -58,6 +81,15 @@ export default function LoginScreen() {
       <Text style={s.label}>パスワード</Text>
       <TextInput style={s.input} value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password" />
       <Button title="ログイン" variant="primary" onPress={onLogin} busy={busy} style={{ marginTop: 20 }} />
+      {sso && (
+        <>
+          <Text style={[s.muted, { marginTop: 16, textAlign: 'center' }]}>または</Text>
+          <Button title={`${sso} でログイン`} onPress={onSso} busy={ssoBusy} style={{ marginTop: 8 }} />
+          <Text style={[s.muted, { marginTop: 6, textAlign: 'center', fontSize: 12 }]}>
+            アカウントの画面で {sso} を連携した人だけが使えます。
+          </Text>
+        </>
+      )}
       <Text style={[s.muted, { marginTop: 16, textAlign: 'center' }]}>
         グループの新規作成は Web から行えます。
       </Text>
