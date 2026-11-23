@@ -758,7 +758,7 @@ MVP のあとで、ダッシュボード・オンボーディング・まとめ�
 | Web | Next.js 15（App Router）+ React 19 + TypeScript |
 | 絵文字 | Web は Noto Color Emoji（Google Fonts から読み込む）で、端末によらず同じデザインにそろえる。モバイルは端末の絵文字 |
 | モバイル | Expo SDK 57（Expo Router、React Native 0.86）+ TypeScript 6.0 |
-| API | Rust（axum 0.7 + sqlx 0.7） |
+| API | Rust（axum 0.7 + sqlx 0.8） |
 | データベース | PostgreSQL 16 |
 | 認証 | JWT + Argon2id |
 | OCR | Tesseract（日本語・英語） |
