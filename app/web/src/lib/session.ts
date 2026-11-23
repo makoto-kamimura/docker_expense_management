@@ -4,7 +4,7 @@ import { apiFetch } from './api';
 import type { Me } from './types';
 
 export async function getCurrentUser(): Promise<Me | null> {
-  const token = cookies().get('token')?.value;
+  const token = (await cookies()).get('token')?.value;
   if (!token) return null;
   try {
     return await apiFetch<Me>('/me', { token });

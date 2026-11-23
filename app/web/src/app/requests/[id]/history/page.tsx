@@ -33,7 +33,8 @@ const day = (iso: string) =>
   new Date(iso).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
 
 /** 稟議の変更履歴 (GitHub の Commits 風)。操作ごとに、編集は変更前 → 変更後を表示する */
-export default async function HistoryPage({ params }: { params: { id: string } }) {
+export default async function HistoryPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await requireUser();
   const d = await getRequestOr404(params.id);
   const r = d.request;

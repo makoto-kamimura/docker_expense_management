@@ -8,7 +8,8 @@ import ChoreButton from '../chore-button';
 import { ImageCaption, ImageUpload } from './chore-images';
 
 /** 家事 1 つの詳細。見本画像で「きれいな状態 = 保つべき状態」を示す */
-export default async function ChoreDetailPage({ params }: { params: { id: string } }) {
+export default async function ChoreDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await requireUser();
   const d = await apiFetch<ChoresResp>('/chores');
   const chore = d.chores.find((c) => c.id === params.id);

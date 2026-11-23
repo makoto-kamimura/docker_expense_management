@@ -6,11 +6,8 @@ import RequestForm, { type RequestDraft } from '@/components/RequestForm';
 import { draftFromDetail } from '@/lib/request-draft';
 import { KINDS, type Label, type Member, type RequestKind, type RequestType } from '@/lib/types';
 
-export default async function NewRequestPage({
-  searchParams,
-}: {
-  searchParams: { type?: string; kind?: string; parent?: string; copy?: string };
-}) {
+export default async function NewRequestPage(props: { searchParams: Promise<{ type?: string; kind?: string; parent?: string; copy?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
   if (!user.can_request) {
     return <div className="notice">グループの管理者から稟議を作成する権限が付与されていません。</div>;

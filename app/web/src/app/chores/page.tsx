@@ -9,7 +9,8 @@ import ContributionGraph from '@/components/ContributionGraph';
 import ChoreButton from './chore-button';
 
 /** 家事のコミット。やった家事を記録し、連続記録・マークを付ける */
-export default async function ChoresPage({ searchParams }: { searchParams: { period?: string } }) {
+export default async function ChoresPage(props: { searchParams: Promise<{ period?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
   const d = await apiFetch<ChoresResp>('/chores');
   const active = d.chores.filter((c) => !c.archived);

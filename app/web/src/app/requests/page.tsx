@@ -33,7 +33,8 @@ function emptyText(status: StatusFilterKey | null, turn: TurnKey): string {
   return `${s}のうち、${turn === 'my_turn' ? 'あなたの番' : '相手の番'}の稟議はありません`;
 }
 
-export default async function RequestsPage({ searchParams }: { searchParams: { filter?: string; turn?: string; type?: string; label?: string } }) {
+export default async function RequestsPage(props: { searchParams: Promise<{ filter?: string; turn?: string; type?: string; label?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
   if (!user.onboarded) redirect('/onboarding');
 

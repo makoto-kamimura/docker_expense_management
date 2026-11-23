@@ -40,7 +40,15 @@ export default function ChoreSettings({ chores }: { chores: ChoreStatus[] }) {
           <ChoreRow chore={c} onError={setErr} />
         </div>
       ))}
-      <form ref={addForm} action={add} className="box-row actions">
+      <form
+        ref={addForm}
+        // React 19 の form action は送信後に入力を空にするので、onSubmit で受けて失敗したときは入力を残す
+        onSubmit={(e) => {
+          e.preventDefault();
+          add(new FormData(e.currentTarget));
+        }}
+        className="box-row actions"
+      >
         <input name="icon" placeholder="自動" title="空欄なら名前から選びます" aria-label="アイコン (絵文字。空欄なら名前から選びます)" style={{ width: 56, textAlign: 'center' }} maxLength={8} />
         <input name="name" placeholder="例: お風呂掃除" aria-label="家事の名前" required maxLength={30} style={{ flex: 1, minWidth: 160 }} />
         <button type="submit" disabled={pending}>追加</button>

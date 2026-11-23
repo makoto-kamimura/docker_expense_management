@@ -2,7 +2,8 @@ import { loginAction } from '@/lib/actions';
 import { ssoErrorMessage, ssoName } from '@/lib/sso-auth';
 import LoginForm from './login-form';
 
-export default async function LoginPage({ searchParams }: { searchParams: { sso_error?: string } }) {
+export default async function LoginPage(props: { searchParams: Promise<{ sso_error?: string }> }) {
+  const searchParams = await props.searchParams;
   const sso = await ssoName();
   const ssoError = ssoErrorMessage(searchParams.sso_error, 'login', sso ?? 'SSO');
   return (

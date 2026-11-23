@@ -13,7 +13,8 @@ import PushToggle from '@/components/PushToggle';
 import SsoLink from './sso-link';
 
 /** Family Settings (readme.md 第7章) */
-export default async function SettingsPage({ searchParams }: { searchParams: { sso?: string; sso_error?: string; sso_only_error?: string } }) {
+export default async function SettingsPage(props: { searchParams: Promise<{ sso?: string; sso_error?: string; sso_only_error?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await requireUser();
   const members = await apiFetch<Member[]>('/family/members');
   const chores = user.is_admin ? (await apiFetch<ChoresResp>('/chores')).chores : [];
