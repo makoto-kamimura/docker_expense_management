@@ -40,7 +40,12 @@ export default function RequestTypeSettings({ types }: { types: RequestType[] })
       ))}
       <form
         ref={addForm}
-        action={(fd) => run(() => createRequestTypeAction(fd), () => addForm.current?.reset())}
+        // React 19 の form action は送信後に入力を空にするので、onSubmit で受けて失敗したときは入力を残す
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          run(() => createRequestTypeAction(fd), () => addForm.current?.reset());
+        }}
         className="box-row actions"
       >
         <input name="icon" placeholder="🗂️" aria-label="種類のアイコン (絵文字)" maxLength={8} style={{ width: 56, textAlign: 'center' }} />

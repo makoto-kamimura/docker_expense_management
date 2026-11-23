@@ -1,5 +1,6 @@
 import './globals.css';
 import { cookies } from 'next/headers';
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import { getCurrentUser } from '@/lib/session';
 import { logoutAction } from '@/lib/actions';
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   // 表示の設定はサーバー側で html に付けて、読み込み時に色が切り替わって見えないようにする
-  const theme = parseTheme(cookies().get(THEME_COOKIE)?.value);
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   // 自分がレビューすべき申請の件数 (Review タブのバッジ) と、未読の通知の数 (ベル)
   const [toReview, unread] = user
     ? await Promise.all([
@@ -44,10 +45,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="header">
           <div className="header-inner" style={user ? undefined : { paddingBottom: 16 }}>
             <div className="header-top">
-              <a href="/" className="brand" aria-label="RingiWoMerge ホーム">
+              <Link href="/" className="brand" aria-label="RingiWoMerge ホーム">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/logo.svg" alt="" width={32} height={32} style={{ display: 'block' }} />
-              </a>
+              </Link>
               <div className="crumbs">
                 {user && (
                   <span className="crumb-family">
@@ -55,7 +56,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     <span className="sep"> / </span>
                   </span>
                 )}
-                <a href="/" style={{ color: 'inherit' }}><strong>RingiWoMerge</strong></a>
+                <Link href="/" style={{ color: 'inherit' }}><strong>RingiWoMerge</strong></Link>
               </div>
               <div className="who">
                 <ThemeSwitch initial={theme} />

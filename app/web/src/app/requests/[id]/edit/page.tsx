@@ -6,7 +6,8 @@ import RequestForm from '@/components/RequestForm';
 import { draftFromDetail } from '@/lib/request-draft';
 import type { Label, Member, RequestType } from '@/lib/types';
 
-export default async function EditRequestPage({ params }: { params: { id: string } }) {
+export default async function EditRequestPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await requireUser();
   const [d, members, labels, allTypes] = await Promise.all([
     getRequestOr404(params.id),

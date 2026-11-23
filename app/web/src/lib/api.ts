@@ -14,8 +14,8 @@ export function toLogin(): Response {
   return new Response(null, { status: 307, headers: { Location: '/login' } });
 }
 
-function getToken(): string | undefined {
-  return cookies().get('token')?.value;
+async function getToken(): Promise<string | undefined> {
+  return (await cookies()).get('token')?.value;
 }
 
 type FetchOpts = RequestInit & { token?: string };
@@ -27,7 +27,7 @@ export class ApiError extends Error {
 }
 
 export async function apiFetch<T>(path: string, opts: FetchOpts = {}): Promise<T> {
-  const token = opts.token ?? getToken();
+  const token = opts.token ?? (await getToken());
   const headers = new Headers(opts.headers ?? {});
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (opts.body && !headers.has('Content-Type') && !(opts.body instanceof FormData)) {

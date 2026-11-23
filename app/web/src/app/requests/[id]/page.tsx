@@ -53,7 +53,9 @@ function RefRow({ r, types }: { r: RequestRef; types: RequestType[] }) {
   );
 }
 
-export default async function RequestDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { step?: string } }) {
+export default async function RequestDetailPage(props: { params: Promise<{ id: string }>; searchParams: Promise<{ step?: string }> }) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
   const user = await requireUser();
   const d = await getRequestOr404(params.id);
   const { request: r, permissions: p } = d;

@@ -30,7 +30,15 @@ export default function LabelSettings({ labels }: { labels: Label[] }) {
       {err && <div className="box-row"><div className="error" role="alert" style={{ margin: 0 }}>{err}</div></div>}
       {labels.length === 0 && <div className="box-row muted">ラベルはまだありません。</div>}
       {labels.map((l) => <LabelRow key={l.id} label={l} onError={setErr} />)}
-      <form ref={addForm} action={add} className="box-row actions">
+      <form
+        ref={addForm}
+        // React 19 の form action は送信後に入力を空にするので、onSubmit で受けて失敗したときは入力を残す
+        onSubmit={(e) => {
+          e.preventDefault();
+          add(new FormData(e.currentTarget));
+        }}
+        className="box-row actions"
+      >
         <input type="color" name="color" value={newColor} onChange={(e) => setNewColor(e.target.value)} aria-label="ラベルの色" className="color-input" />
         <input name="name" placeholder="例: 急ぎ" aria-label="ラベルの名前" required maxLength={30} style={{ width: 180 }} />
         <input name="description" placeholder="説明 (任意)" aria-label="ラベルの説明" maxLength={100} style={{ flex: 1, minWidth: 160 }} />

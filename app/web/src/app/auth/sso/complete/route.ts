@@ -21,7 +21,7 @@ function failed(mode: 'login' | 'link', reason: string): NextResponse {
  * GET /auth/sso/complete?code=… | ?error=…
  */
 export async function GET(req: NextRequest) {
-  const pkce = decodePkce(cookies().get(PKCE_COOKIE)?.value);
+  const pkce = decodePkce((await cookies()).get(PKCE_COOKIE)?.value);
   // Cookie がない = このブラウザで始めた流れではない (または 10 分を過ぎた)
   if (!pkce) return failed('login', 'expired');
   const error = req.nextUrl.searchParams.get('error');
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (pkce.mode === 'link') {
-    const token = cookies().get(COOKIE_NAME)?.value;
+    const token = (await cookies()).get(COOKIE_NAME)?.value;
     if (!token) return redirectTo('/login');
     headers.Authorization = `Bearer ${token}`;
   }

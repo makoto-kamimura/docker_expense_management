@@ -9,8 +9,8 @@ import type { Member, RequestDetail } from './types';
 
 type Result = { error?: string };
 
-function setTokenCookie(token: string) {
-  cookies().set(COOKIE_NAME, token, COOKIE_OPTIONS);
+async function setTokenCookie(token: string) {
+  (await cookies()).set(COOKIE_NAME, token, COOKIE_OPTIONS);
 }
 
 /** API 呼び出しを包み、失敗したらフォームに表示するエラーを返す */
@@ -43,7 +43,7 @@ export async function loginAction(formData: FormData): Promise<Result> {
       return { error: j.error ?? 'ログインできませんでした' };
     }
     const data = (await res.json()) as { token: string; user: Member };
-    setTokenCookie(data.token);
+    await setTokenCookie(data.token);
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -71,7 +71,7 @@ export async function registerAction(formData: FormData): Promise<Result> {
       return { error: j.error ?? 'アカウントを作成できませんでした' };
     }
     const data = (await res.json()) as { token: string; user: Member };
-    setTokenCookie(data.token);
+    await setTokenCookie(data.token);
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -79,7 +79,7 @@ export async function registerAction(formData: FormData): Promise<Result> {
 }
 
 export async function logoutAction() {
-  cookies().delete(COOKIE_NAME);
+  (await cookies()).delete(COOKIE_NAME);
   redirect('/login');
 }
 

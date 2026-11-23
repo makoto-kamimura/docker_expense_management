@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   if (mode === 'link') {
     // 連携はログイン中の本人だけ。ブラウザの遷移では Bearer を送れないので、先に intent を取る
-    const token = cookies().get(COOKIE_NAME)?.value;
+    const token = (await cookies()).get(COOKIE_NAME)?.value;
     if (!token) return redirectTo('/login');
     try {
       const { intent } = await apiFetch<{ intent: string }>('/me/identities/sso/intent', {

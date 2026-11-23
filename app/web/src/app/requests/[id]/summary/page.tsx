@@ -13,7 +13,8 @@ import Markdown from '@/components/Markdown';
 
 
 /** 申請内容を家族会議・印刷向けのスライドにまとめる */
-export default async function SummaryPage({ params }: { params: { id: string } }) {
+export default async function SummaryPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await requireUser();
   const d = await getRequestOr404(params.id);
   const { request: r } = d;

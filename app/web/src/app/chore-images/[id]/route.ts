@@ -3,10 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApiBase, toLogin } from '@/lib/api';
 
 /** 家事の見本画像を Cookie 認証で API から取得して返すプロキシ */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const token = cookies().get('token')?.value;
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const token = (await cookies()).get('token')?.value;
   if (!token) return toLogin();
-  const res = await fetch(`${getApiBase()}/chore-images/${params.id}`, {
+  const res = await fetch(`${getApiBase()}/chore-images/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
   });
