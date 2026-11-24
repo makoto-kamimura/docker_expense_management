@@ -1,0 +1,42 @@
+# AIエージェント（Claude Code のルーティン）の PR は、影響の大きいファイルに触れない（docs/automation/fix-issue.md の4章）。
+# pull_request_target なので、PR の側ではなく main にあるこの定義で動く（PR の中でこのファイルを書き換えても外せない）。
+# PR のコードは取り出さず、変更されたファイルの名前だけを API で読む。
+name: automation-guard
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  automation-guard:
+    if: startsWith(github.head_ref, 'claude/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 影響の大きいファイルに触れていないか
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # 名前を変えたファイルは、前の名前も調べる
+          files="$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')"
+          printf '%s\n' "$files"
+          bad="$(printf '%s\n' "$files" | grep -E \
+            -e '^(\.github|platform|docs/automation)/' \
+            -e '(^|/)Dockerfile$' \
+            -e '(^|/)(Cargo\.toml|Cargo\.lock|package\.json|package-lock\.json)$' \
+            -e '^app/backend/src/(migrate|auth|oidc)\.rs$' \
+            -e '^app/backend/src/handlers/(auth|sso)\.rs$' \
+            -e '^app/web/src/middleware\.ts$' \
+            -e '^app/web/src/lib/(auth-cookie|session|sso-auth)\.ts$' \
+            || true)"
+          if [ -n "$bad" ]; then
+            echo "$bad"
+            echo "::error::AIエージェントの PR では、上のファイルを変えられません（運用者が手で変えます）"
+            exit 1
+          fi
