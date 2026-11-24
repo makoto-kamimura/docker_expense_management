@@ -25,6 +25,9 @@ use crate::{
     state::AppState,
 };
 
+/// 比較の候補の 1 行（名前・金額・URL・メモ）。変更履歴の差分を取るのに使う
+type AlternativeRow = (String, Option<i64>, Option<String>, Option<String>);
+
 const MAX_PRICE: i64 = 1_000_000_000_000;
 const MAX_ALTERNATIVES: usize = 20;
 /// 理由・メモ・承認後のタスク・コメントの上限 (文字数。日本語は 1 文字 3 バイトなのでバイト数では数えない)
@@ -754,7 +757,7 @@ pub async fn update(
         let new_names: Vec<String> = new_names.into_iter().map(|n| n.0).collect();
         diff("reviewers", json!(old_names), json!(new_names));
     }
-    let old_alts: Vec<(String, Option<i64>, Option<String>, Option<String>)> = sqlx::query_as(
+    let old_alts: Vec<AlternativeRow> = sqlx::query_as(
         "SELECT name, price, url, notes FROM alternative_products WHERE request_id = $1 ORDER BY position",
     )
     .bind(id)
@@ -767,7 +770,7 @@ pub async fn update(
         .collect();
     if old_alts != new_alts {
         // 表示用に「名前 (金額)」の一覧で残す
-        let summary = |alts: &[(String, Option<i64>, Option<String>, Option<String>)]| -> Vec<Value> {
+        let summary = |alts: &[AlternativeRow]| -> Vec<Value> {
             alts.iter().map(|(n, p, _, _)| json!({ "name": n, "price": p })).collect()
         };
         diff("alternatives", json!(summary(&old_alts)), json!(summary(&new_alts)));
@@ -950,7 +953,7 @@ pub async fn submit(
             if req.reason.trim().is_empty() { missing.push("購入理由"); }
         }
         RequestKind::Outing => {
-            if req.product_name.as_deref().map_or(true, |s| s.trim().is_empty()) { missing.push("行き先"); }
+            if req.product_name.as_deref().is_none_or(|s| s.trim().is_empty()) { missing.push("行き先"); }
             if req.reason.trim().is_empty() { missing.push("行きたい理由"); }
         }
         RequestKind::Activity => {
