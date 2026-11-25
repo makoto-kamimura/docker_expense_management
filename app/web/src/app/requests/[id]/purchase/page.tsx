@@ -9,7 +9,7 @@ import Attachments from '@/components/Attachments';
 import AttachmentUpload from '@/components/AttachmentUpload';
 import PurchaseForm from './purchase-form';
 
-/** Mark as Purchased: 実際の購入情報とレシートを登録する (readme.md 10.2節) */
+/** Mark as Purchased: 実際の購入情報とレシートを登録する (README.md 10.2節) */
 export default async function PurchasePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   await requireUser();

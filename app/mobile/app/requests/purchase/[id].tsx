@@ -9,7 +9,7 @@ import { Button, Card, s } from '@/components/ui';
 import { KIND_TEXT, type RequestDetail } from '@/types';
 import { useTheme } from '@/theme';
 
-/** Mark as Purchased (readme.md 10.2節)。レシート撮影で実額・購入日を自動入力できる。 */
+/** Mark as Purchased (README.md 10.2節)。レシート撮影で実額・購入日を自動入力できる。 */
 export default function PurchaseScreen() {
   useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();

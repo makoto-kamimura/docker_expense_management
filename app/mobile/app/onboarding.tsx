@@ -11,7 +11,7 @@ const STEPS = [
   { title: '3. 承認してマージ', body: 'みんなが納得したら「マージ」します。マージ＝グループが購入に合意したこと。あとは購入するだけです。' },
 ];
 
-/** 初回ログイン時の 3 ステップ説明 (readme.md 6.2節) */
+/** 初回ログイン時の 3 ステップ説明 (README.md 6.2節) */
 export default function OnboardingScreen() {
   useTheme();
   const [step, setStep] = useState(0);
