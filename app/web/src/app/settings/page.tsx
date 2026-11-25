@@ -12,7 +12,7 @@ import MyName from './my-name';
 import PushToggle from '@/components/PushToggle';
 import SsoLink from './sso-link';
 
-/** Family Settings (readme.md 第7章) */
+/** Family Settings (README.md 第7章) */
 export default async function SettingsPage(props: { searchParams: Promise<{ sso?: string; sso_error?: string; sso_only_error?: string }> }) {
   const searchParams = await props.searchParams;
   const user = await requireUser();

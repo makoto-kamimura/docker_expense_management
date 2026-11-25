@@ -1,10 +1,10 @@
 # 運用手順書
 
-RingiWoMerge (稟議をマージ) のローカル起動・運用・トラブルシュート手順を記載する。仕様は [readme.md](../../readme.md) を参照する。
+RingiWoMerge (稟議をマージ) のローカル起動・運用・トラブルシュート手順を記載する。仕様は [README.md](../../README.md) を参照する。
 
 ## システム構成
 
-構成図・サービスとポートの一覧は、仕様書の [17.2 システム構成](../../readme.md#172-システム構成) と [17.4 Docker Compose の構成](../../readme.md#174-docker-compose-の構成) を参照。
+構成図・サービスとポートの一覧は、仕様書の [17.2 システム構成](../../README.md#172-システム構成) と [17.4 Docker Compose の構成](../../README.md#174-docker-compose-の構成) を参照。
 
 ## 1. 起動 / 停止
 

@@ -1,4 +1,4 @@
-# RingiWoMerge — 稟議をマージ
+# RingiWoMerge — 稟議をマージ（docker_expense_management）
 
 > **Big purchases deserve a review.** 大きな買い物は、グループのレビューを通してから。
 
@@ -27,6 +27,7 @@ Request → Review → Comment → Approve → Merge → Purchase
 | ステータス | **MVP 実装済み・拡張機能まで実装済み**（[ロードマップ](#16-開発ロードマップ)の Phase 1・Phase 2 完了。公開デモ <https://expense.makoto-kamimura.com> で稼働中。Phase 3 の本番化は未着手） |
 | リリース日 | 未定（Phase 3 の本番化の完了時に正式リリースする予定） |
 | 作成者 | **Makoto Kamimura** — [@makoto-kamimura](https://github.com/makoto-kamimura) |
+| ライセンス | [MIT](LICENSE) |
 
 このREADMEは、プロジェクト紹介と仕様書を兼ね、次の2部と付録で構成する。
 
@@ -787,7 +788,7 @@ flowchart LR
 
 ```text
 docker_expense_management/
-├── readme.md
+├── README.md
 ├── .github/workflows/        CI（17.6節）
 ├── docs/                     運用手順書・タスク・Issue の自動対応の手順など（docs/README.md）
 ├── app/

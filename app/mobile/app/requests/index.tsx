@@ -8,7 +8,7 @@ import { NotificationButton } from '@/components/NotificationButton';
 import { DEFAULT_TURN, FILTER_STEPS, STATUS_FILTERS, TURN_FILTERS, statusLabel, typeOf, type LinkedRequest, type Me, type RequestCounts, type RequestListItem, type RequestType, type StatusFilterKey, type TurnKey, type FilterTone } from '@/types';
 import { useTheme } from '@/theme';
 
-/** トップ: 申請一覧 + フィルター (readme.md 8.6節) */
+/** トップ: 申請一覧 + フィルター (README.md 8.6節) */
 export default function RequestsScreen() {
   useTheme();
   const [items, setItems] = useState<RequestListItem[]>([]);
